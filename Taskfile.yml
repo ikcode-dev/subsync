@@ -9,7 +9,7 @@ tasks:
   run:
     desc: Run the application
     cmds:
-      - uv run sub-mvp
+      - uv run subflow
 
   test:
     desc: Run tests

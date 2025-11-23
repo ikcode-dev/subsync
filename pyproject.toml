@@ -1,5 +1,5 @@
 [project]
-name = "sub-mvp"
+name = "subflow"
 version = "0.1.0"
 description = "CLI MVP tool to generate subtitles for videos optimized for YouTube"
 readme = "README.md"
@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-sub-mvp = "sub_mvp.cli:main"
+subflow = "subflow.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]

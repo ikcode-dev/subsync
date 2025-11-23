@@ -1,4 +1,4 @@
-# SubMVP
+# Subflow
 
 This is MVP version of the app that I'm going to use to generate subtitles for YouTube (or any other) videos.
 
@@ -43,7 +43,7 @@ source ~/.zshrc
 To run it use:
 
 ```shell
-uv run sub-mvp
+uv run subflow
 ```
 
 At this stage it will output this simple message:
