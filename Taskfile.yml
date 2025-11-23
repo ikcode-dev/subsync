@@ -9,7 +9,7 @@ tasks:
   run:
     desc: Run the application
     cmds:
-      - uv run subflow
+      - uv run subsync
 
   test:
     desc: Run tests
