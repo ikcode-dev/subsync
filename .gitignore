@@ -1,2 +1,3 @@
 .venv/
-src/sub_mvp/__pycache__/
+__pycache__/
+.pytest_cache/
