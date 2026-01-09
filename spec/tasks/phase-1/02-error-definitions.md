@@ -117,12 +117,12 @@ class TranscriptionError(SubSyncError):
 
 ## Verification Checklist
 
-- [ ] File created at `src/subsync/errors.py`
-- [ ] All 6 exception classes implemented
-- [ ] All exceptions inherit from `SubSyncError`
-- [ ] All exceptions have docstrings
-- [ ] `from subsync.errors import SubSyncError, URLParseError, ...` works
-- [ ] `task lint` passes
+- [x] File created at `src/subsync/errors.py`
+- [x] All 6 exception classes implemented
+- [x] All exceptions inherit from `SubSyncError`
+- [x] All exceptions have docstrings
+- [x] `from subsync.errors import SubSyncError, URLParseError, ...` works
+- [x] `task lint` passes
 
 ### Quick Import Test
 
