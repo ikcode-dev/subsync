@@ -11,3 +11,14 @@ applyTo: "**/*.py"
 ## Error Handling
 - **Exceptions**: Use specific exception handling rather than catching generic `Exception`.
 - **Logging**: Use the standard `logging` module instead of `print` statements for debug and info messages (unless outputting to stdout for CLI user interaction).
+
+## Dataclasses
+- **Mutable defaults**: Use `field(default_factory=lambda: [])` instead of `field(default_factory=list)` to ensure Pyright/Pylance can infer the correct element type from the annotation.
+
+```python
+# ❌ Causes "Type is partially unknown" warning
+words: list[Word] = field(default_factory=list)
+
+# ✅ Type checker infers list[Word] correctly
+words: list[Word] = field(default_factory=lambda: [])
+```
