@@ -71,13 +71,13 @@ Verify FFmpeg is available in PATH (required by yt-dlp for audio extraction).
 
 ## Verification Checklist
 
-- [] `uv sync` completes without errors
-- [] `uv run python -c "import yt_dlp"` succeeds
-- [] `uv run python -c "import whisper"` succeeds
-- [] `uv run python -c "import rich"` succeeds
-- [] `uv run python -c "import pytest"` succeeds
-- [] `ffmpeg -version` returns version info (not "command not found")
-- [] `task lint` passes
+- [x] `uv sync` completes without errors
+- [x] `uv run python -c "import yt_dlp"` succeeds
+- [x] `uv run python -c "import whisper"` succeeds
+- [x] `uv run python -c "import rich"` succeeds
+- [x] `uv run python -c "import pytest"` succeeds
+- [x] `ffmpeg -version` returns version info (not "command not found")
+- [x] `task lint` passes
 
 ---
 
