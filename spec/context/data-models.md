@@ -1,246 +1,184 @@
-# Data Models - Context
+# Data Models
 
 ## Overview
 
-This document defines the core data structures used throughout the SubSync application. These models ensure consistent data flow between modules.
+This document defines the conceptual data structures used throughout SubSync. These models describe the domain entities and their relationships, providing a contract for data flow between modules.
 
 **Reference**: [SUBTITLE_GENERATION_ALGORITHM.md](../../docs/SUBTITLE_GENERATION_ALGORITHM.md) Section 7
 
 ---
 
-## Core Models
+## Core Domain Entities
 
 ### VideoMetadata
 
-Extracted information about the YouTube video.
+Information extracted from a YouTube video.
 
-```python
-@dataclass
-class VideoMetadata:
-    id: str              # YouTube video ID (11 characters)
-    title: str           # Video title (sanitized for filename)
-    duration: float      # Duration in seconds
-    uploader: str        # Channel name
-    upload_date: str     # YYYYMMDD format
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string | YouTube video ID (11 characters) |
+| title | string | Video title (sanitized for filename use) |
+| duration | float | Duration in seconds |
+| uploader | string | Channel name |
+| upload_date | string | Format: YYYYMMDD |
 
 **Source**: yt-dlp `extract_info()` response
 
 ---
 
-### Word
+### Transcription Entities
+
+#### Word
 
 Individual word with precise timing from Whisper.
 
-```python
-@dataclass
-class Word:
-    word: str            # The word text
-    start: float         # Start time in seconds
-    end: float           # End time in seconds
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| word | string | The word text |
+| start | float | Start time in seconds |
+| end | float | End time in seconds |
 
----
-
-### TranscriptionSegment
+#### TranscriptionSegment
 
 A segment of transcribed speech.
 
-```python
-@dataclass
-class TranscriptionSegment:
-    id: int              # Segment index (0-based from Whisper)
-    start: float         # Start time in seconds
-    end: float           # End time in seconds
-    text: str            # Transcribed text
-    words: list[Word]    # Word-level timestamps (may be empty)
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| id | integer | Segment index (0-based from Whisper) |
+| start | float | Start time in seconds |
+| end | float | End time in seconds |
+| text | string | Transcribed text |
+| words | list of Word | Word-level timestamps (may be empty) |
 
----
-
-### TranscriptionResult
+#### TranscriptionResult
 
 Complete output from the transcription process.
 
-```python
-@dataclass
-class TranscriptionResult:
-    language: str                       # Detected/specified language code
-    duration: float                     # Total audio duration in seconds
-    segments: list[TranscriptionSegment]
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| language | string | Detected/specified language code |
+| duration | float | Total audio duration in seconds |
+| segments | list of TranscriptionSegment | Ordered segments |
 
 ---
 
-### Subtitle
+### Subtitle Entities
+
+#### Subtitle
 
 A single subtitle event ready for output.
 
-```python
-@dataclass
-class Subtitle:
-    index: int               # Sequential number (1-based for SRT)
-    start_time: timedelta    # Start timestamp
-    end_time: timedelta      # End timestamp
-    text: str                # Original text (pre-formatting)
-    lines: list[str]         # Formatted lines (1-2 max)
+| Field | Type | Description |
+|-------|------|-------------|
+| index | integer | Sequential number (1-based for SRT) |
+| start_time | timedelta | Start timestamp |
+| end_time | timedelta | End timestamp |
+| text | string | Original text (pre-formatting) |
+| lines | list of string | Formatted lines (1-2 max) |
 
-    @property
-    def char_count(self) -> int:
-        """Total characters across all lines."""
-        return sum(len(line) for line in self.lines)
+**Computed Properties**:
+- **char_count**: Total characters across all lines
+- **duration_ms**: Duration in milliseconds
+- **cps**: Characters per second (char_count / duration)
 
-    @property
-    def duration_ms(self) -> int:
-        """Duration in milliseconds."""
-        return int((self.end_time - self.start_time).total_seconds() * 1000)
-
-    @property
-    def cps(self) -> float:
-        """Characters per second."""
-        duration_secs = self.duration_ms / 1000
-        return self.char_count / duration_secs if duration_secs > 0 else 0
-```
-
----
-
-### SubtitleFile
+#### SubtitleFile
 
 Container for a complete subtitle file.
 
-```python
-@dataclass
-class SubtitleFile:
-    format: str                  # "srt" or "vtt"
-    language: str                # Language code
-    video_id: str                # Source video ID
-    subtitles: list[Subtitle]    # Ordered subtitle events
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| format | string | "srt" or "vtt" |
+| language | string | Language code |
+| video_id | string | Source video ID |
+| subtitles | list of Subtitle | Ordered subtitle events |
 
 ---
 
-## Validation Models
+## Validation Entities
 
 ### TimingValidation
 
-Result of timing validation for a subtitle.
+Result of timing validation for a single subtitle.
 
-```python
-@dataclass
-class TimingValidation:
-    is_valid: bool
-    duration_ok: bool            # 833ms <= duration <= 7000ms
-    gap_ok: bool                 # >= 83ms from previous
-    issues: list[str]            # Description of any issues
-```
-
----
+| Field | Type | Description |
+|-------|------|-------------|
+| is_valid | boolean | Overall validation result |
+| duration_ok | boolean | 833ms ≤ duration ≤ 7000ms |
+| gap_ok | boolean | ≥ 83ms from previous subtitle |
+| issues | list of string | Description of any issues |
 
 ### ComplianceReport
 
 Aggregate compliance status for a subtitle file.
 
-```python
-@dataclass
-class ComplianceReport:
-    total_subtitles: int
-    timing_issues: int
-    cps_warnings: int            # Subtitles exceeding CPS limit
-    line_length_issues: int      # Lines exceeding 42 chars
-    is_compliant: bool           # No blocking issues
-    warnings: list[str]          # Non-blocking issues
-    errors: list[str]            # Blocking issues
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| total_subtitles | integer | Total subtitle count |
+| timing_issues | integer | Count of timing violations |
+| cps_warnings | integer | Subtitles exceeding CPS limit |
+| line_length_issues | integer | Lines exceeding 42 characters |
+| is_compliant | boolean | No blocking issues |
+| warnings | list of string | Non-blocking issues |
+| errors | list of string | Blocking issues |
 
 ---
 
-## Configuration Models
+## Configuration Entities
 
 ### TranscriptionConfig
 
-Configuration for the transcription process.
+Settings for the transcription process.
 
-```python
-@dataclass
-class TranscriptionConfig:
-    model_name: str = "turbo"        # Whisper model
-    language: str | None = None       # None = auto-detect
-    word_timestamps: bool = True
-    device: str = "auto"              # "auto", "cuda", "cpu"
-```
-
----
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| model_name | string | "turbo" | Whisper model to use |
+| language | string or null | null | Language code (null = auto-detect) |
+| word_timestamps | boolean | true | Request word-level timing |
+| device | string | "auto" | Compute device: "auto", "cuda", "cpu" |
 
 ### ProcessingConfig
 
-Configuration for subtitle processing.
+Settings for subtitle processing (Netflix compliance).
 
-```python
-@dataclass
-class ProcessingConfig:
-    max_chars_per_line: int = 42
-    max_lines: int = 2
-    min_duration_ms: int = 833
-    max_duration_ms: int = 7000
-    min_gap_ms: int = 83
-    max_cps_adult: float = 20.0
-    max_cps_children: float = 17.0
-    is_children_content: bool = False
-```
-
----
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| max_chars_per_line | integer | 42 | Maximum characters per line |
+| max_lines | integer | 2 | Maximum lines per subtitle |
+| min_duration_ms | integer | 833 | Minimum subtitle duration |
+| max_duration_ms | integer | 7000 | Maximum subtitle duration |
+| min_gap_ms | integer | 83 | Minimum gap between subtitles |
+| max_cps_adult | float | 20.0 | Max CPS for adult content |
+| max_cps_children | float | 17.0 | Max CPS for children's content |
+| is_children_content | boolean | false | Apply stricter CPS limit |
 
 ### OutputConfig
 
-Configuration for output generation.
+Settings for output generation.
 
-```python
-@dataclass
-class OutputConfig:
-    format: str = "srt"              # "srt" or "vtt"
-    output_path: Path | None = None  # None = auto-generate
-    include_bom: bool = False        # UTF-8 BOM
-```
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| format | string | "srt" | Output format: "srt" or "vtt" |
+| output_path | path or null | null | Output path (null = auto-generate) |
+| include_bom | boolean | false | Include UTF-8 BOM |
 
 ---
 
-## Error Models
+## Error Categories
 
-### SubSyncError (Base)
+SubSync defines a hierarchy of errors for granular handling:
 
-```python
-class SubSyncError(Exception):
-    """Base exception for SubSync errors."""
-    pass
-```
-
-### Specific Errors
-
-```python
-class VideoUnavailableError(SubSyncError):
-    """Video is private, deleted, or region-locked."""
-    pass
-
-class AgeRestrictedError(SubSyncError):
-    """Video requires age verification."""
-    pass
-
-class LiveStreamError(SubSyncError):
-    """Live streams are not supported."""
-    pass
-
-class TranscriptionError(SubSyncError):
-    """Error during audio transcription."""
-    pass
-
-class URLParseError(SubSyncError):
-    """Invalid or unsupported YouTube URL."""
-    pass
-```
+| Error Type | When Raised |
+|------------|-------------|
+| SubSyncError | Base for all SubSync errors |
+| URLParseError | Invalid/unsupported YouTube URL |
+| VideoUnavailableError | Video is private, deleted, or region-locked |
+| AgeRestrictedError | Video requires age verification |
+| LiveStreamError | Live streams not supported |
+| TranscriptionError | Audio transcription failures |
 
 ---
 
-## Module Boundaries
+## Data Flow
 
 | Model | Created By | Consumed By |
 |-------|------------|-------------|
@@ -252,10 +190,10 @@ class URLParseError(SubSyncError):
 
 ---
 
-## Implementation Notes
+## Constraints
 
-1. Use `@dataclass` for simple data containers
-2. Use `typing` for all type hints
-3. Consider `pydantic` if validation becomes complex
-4. Keep models in a dedicated `models.py` module
-5. Models should be immutable where practical
+1. Video IDs are exactly 11 characters
+2. Subtitle indices start at 1 (SRT convention)
+3. Timestamps use millisecond precision
+4. Text encoding must be UTF-8
+5. Lines array has maximum 2 elements

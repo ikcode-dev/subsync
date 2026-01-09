@@ -1,4 +1,4 @@
-# Third-Party Dependencies - Context
+# Third-Party Dependencies
 
 ## Overview
 
@@ -14,43 +14,23 @@ This document captures information about external dependencies required for SubS
 
 | Property | Value |
 |----------|-------|
-| **Package** | `yt-dlp` |
-| **License** | Unlicense (Public Domain) |
-| **PyPI** | https://pypi.org/project/yt-dlp/ |
-| **GitHub** | https://github.com/yt-dlp/yt-dlp |
+| Package | `yt-dlp` |
+| License | Unlicense (Public Domain) |
+| PyPI | https://pypi.org/project/yt-dlp/ |
+| GitHub | https://github.com/yt-dlp/yt-dlp |
 
-#### Key Features Used
-
+**Key Features Used**:
 - Video metadata extraction (title, duration, availability)
-- Audio-only download (`extract_audio=True`)
-- Format selection (`bestaudio/best`)
-- Progress callbacks
+- Audio-only download
+- Format selection for best audio quality
+- Progress callbacks for user feedback
 - Python embedding API
 
-#### Integration Pattern
-
-```python
-import yt_dlp
-
-ydl_opts = {
-    'format': 'bestaudio/best',
-    'extract_audio': True,
-    'audio_format': 'wav',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'wav',
-    }],
-}
-
-with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    info = ydl.extract_info(url, download=True)
-```
-
-#### Considerations
-
+**Considerations**:
 - Requires FFmpeg for audio extraction
 - Regular updates needed (YouTube changes frequently)
 - Handles cookies for age-restricted content
+- Well-documented error handling with specific exception types
 
 ---
 
@@ -60,12 +40,12 @@ with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
 | Property | Value |
 |----------|-------|
-| **Package** | `openai-whisper` |
-| **License** | MIT |
-| **PyPI** | https://pypi.org/project/openai-whisper/ |
-| **GitHub** | https://github.com/openai/whisper |
+| Package | `openai-whisper` |
+| License | MIT |
+| PyPI | https://pypi.org/project/openai-whisper/ |
+| GitHub | https://github.com/openai/whisper |
 
-#### Available Models
+**Available Models**:
 
 | Model | Parameters | VRAM | Relative Speed | Use Case |
 |-------|------------|------|----------------|----------|
@@ -76,47 +56,22 @@ with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 | large-v3 | 1550M | ~10GB | 1x | Best accuracy |
 | **turbo** | 809M | ~6GB | ~8x | **Recommended default** |
 
-#### Integration Pattern
+**Key Features**:
+- Word-level timestamps for precise subtitle timing
+- 99+ language support with auto-detection
+- GPU acceleration with CUDA
+- CPU fallback when GPU unavailable
 
-```python
-import whisper
-
-model = whisper.load_model("turbo")
-result = model.transcribe(
-    audio_path,
-    language="en",
-    word_timestamps=True,
-    verbose=False
-)
-```
-
-#### Output Structure
-
-```python
-{
-    "text": "Full transcription text",
-    "language": "en",
-    "segments": [
-        {
-            "id": 0,
-            "start": 0.0,
-            "end": 2.5,
-            "text": "Segment text",
-            "words": [
-                {"word": "Segment", "start": 0.0, "end": 0.5},
-                {"word": "text", "start": 0.6, "end": 1.0}
-            ]
-        }
-    ]
-}
-```
-
-#### Considerations
-
+**Considerations**:
 - First run downloads model (~1-6GB depending on size)
 - GPU (CUDA) significantly faster than CPU
-- Word timestamps enable precise subtitle timing
-- Supports 99+ languages with auto-detection
+- Model loading can be cached for repeated use
+
+**Output Structure** (conceptual):
+- Full text transcription
+- Detected language code
+- Segments with start/end times and text
+- Optional word-level timing within segments
 
 ---
 
@@ -126,28 +81,19 @@ result = model.transcribe(
 
 | Property | Value |
 |----------|-------|
-| **Type** | System dependency |
-| **License** | GPL/LGPL |
-| **Website** | https://ffmpeg.org/ |
+| Type | System dependency (not Python package) |
+| License | GPL/LGPL |
+| Website | https://ffmpeg.org/ |
 
-#### Installation
+**Installation**:
+- macOS: `brew install ffmpeg`
+- Ubuntu/Debian: `apt install ffmpeg`
+- Windows: `choco install ffmpeg`
 
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-apt install ffmpeg
-
-# Windows
-choco install ffmpeg
-```
-
-#### Why Required
-
-1. **yt-dlp**: Extracts audio from video containers
-2. **Whisper**: Loads and processes audio files
-3. **Audio conversion**: Normalize to Whisper-optimal format (16kHz WAV)
+**Why Required**:
+1. yt-dlp uses it to extract audio from video containers
+2. Whisper uses it to load and process audio files
+3. Audio conversion to Whisper-optimal format (16kHz mono WAV)
 
 ---
 
@@ -158,15 +104,6 @@ choco install ffmpeg
 | Package | Purpose | License |
 |---------|---------|---------|
 | `rich` | Progress bars, colored output | MIT |
-| `click` | CLI framework (alternative to argparse) | BSD |
-| `typer` | Modern CLI with type hints | MIT |
-
-### For Subtitle Handling
-
-| Package | Purpose | License |
-|---------|---------|---------|
-| `pysrt` | SRT file manipulation | GPL |
-| `webvtt-py` | WebVTT parsing/generation | MIT |
 
 ### For Testing
 
@@ -174,30 +111,6 @@ choco install ffmpeg
 |---------|---------|---------|
 | `pytest` | Test framework | MIT |
 | `pytest-cov` | Coverage reporting | MIT |
-| `responses` | HTTP mocking | Apache 2.0 |
-
----
-
-## Dependency Management
-
-### Installation Commands
-
-```bash
-# Core dependencies
-uv add yt-dlp openai-whisper
-
-# CLI enhancement
-uv add rich
-
-# Development dependencies
-uv add --group dev pytest pytest-cov ruff
-```
-
-### Version Pinning Strategy
-
-- Pin major versions for stability
-- Allow minor/patch updates for security fixes
-- Lock file (`uv.lock`) for reproducibility
 
 ---
 
@@ -221,7 +134,7 @@ uv add --group dev pytest pytest-cov ruff
 Whisper automatically falls back to CPU if CUDA unavailable:
 - Significantly slower (5-20x)
 - Still functional for all model sizes
-- Consider smaller models for CPU-only
+- Consider smaller models (base, small) for CPU-only usage
 
 ---
 
@@ -230,4 +143,12 @@ Whisper automatically falls back to CPU if CUDA unavailable:
 1. **yt-dlp**: Only downloads from YouTube, no arbitrary code execution
 2. **Whisper**: Local model, no data sent to external services
 3. **FFmpeg**: Well-audited, industry standard
-4. **User content**: Audio files are temporary, deleted after processing
+4. **User content**: Audio files should be temporary, deleted after processing
+
+---
+
+## References
+
+- [yt-dlp Documentation](https://github.com/yt-dlp/yt-dlp#readme)
+- [Whisper Documentation](https://github.com/openai/whisper#readme)
+- [FFmpeg Documentation](https://ffmpeg.org/documentation.html)
