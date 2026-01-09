@@ -53,24 +53,53 @@ Context files capture:
 
 ### 2. Planning Phase (`spec/plan/`)
 
-Plans are feature-scoped implementation strategies:
-- One `.md` file per feature
+Plans are feature-scoped implementation strategies that define **what** and **why**, not **how**:
+- One `.md` file per feature/phase
 - Architecture decisions with rationale
-- Component breakdown
-- Integration points
-- Risk identification
+- Component breakdown and responsibilities
+- Integration points and data flow
+- Risk identification and mitigation strategies
 
-**Your role**: Help create or refine plans. Use **Tree of Thoughts** for architectural decisions—explore branches, evaluate trade-offs, then converge.
+**Plans should include:**
+- Requirements and acceptance criteria
+- Constraints and boundaries
+- Pseudo-code to illustrate algorithms or flow (not real code)
+- Mermaid diagrams for architecture, sequence, or data flow visualization
+- Interface definitions (inputs/outputs, data contracts)
+- Error conditions and edge cases to handle
+
+**Plans should NOT include:**
+- Actual implementation code
+- Specific code patterns that lock in implementation details
+- Library-specific syntax or API calls
+
+> **Principle**: The "how" is solved during implementation. Plans stay stable even when implementation evolves.
+
+**Your role**: Help create or refine plans. Use **Tree of Thoughts** for architectural decisions—explore branches, evaluate trade-offs, then converge. Focus on clarity of intent, not implementation specifics.
 
 ### 3. Task Definition (`spec/task/`)
 
-Tasks are atomic, implementable units:
-- Clear acceptance criteria
+Tasks are atomic, implementable units that describe **what** to build and **why**, leaving **how** to the developer:
+- Clear acceptance criteria (observable outcomes, not code structure)
 - Links to relevant context and plan sections
 - Dependencies on other tasks (if any)
 - Estimated complexity
+- Test scenarios to verify completion
 
-**Your role**: Break down plans into well-defined tasks. Each task file may contain a single task or multiple related tasks for a phase.
+**Tasks should include:**
+- Functional requirements (what the code must do)
+- Input/output specifications
+- Error handling requirements (what errors, not how to catch them)
+- Verification criteria (how to know it's done)
+
+**Tasks should NOT include:**
+- Code snippets or implementation examples
+- Specific class/function designs
+- Internal architecture decisions
+
+> **Principle**: A well-written task tells you what success looks like, not how to achieve it.
+
+**Your role**: Break down plans into well-defined tasks. Each task file may contain a single task or multiple related tasks for a phase. Focus on acceptance criteria that can be verified, not prescriptive implementation steps.
 
 ### 4. Implementation (One Task at a Time)
 
@@ -191,11 +220,13 @@ Discover from instructions, but typically:
 
 ### Spec Directories
 
-| Directory | Purpose |
-|-----------|---------|
-| `spec/context/` | Domain knowledge, constraints, research |
-| `spec/plan/` | Feature implementation plans |
-| `spec/task/` | Atomic, implementable tasks |
+| Directory | Purpose | Contains |
+|-----------|---------|----------|
+| `spec/context/` | Domain knowledge, constraints, research | What we know, why it matters |
+| `spec/plan/` | Feature implementation strategies | What to build, why, boundaries (no code) |
+| `spec/task/` | Atomic, verifiable work units | What success looks like (no code) |
+
+> **Remember**: Specs define the **what** and **why**. The **how** is determined during implementation.
 
 ---
 
