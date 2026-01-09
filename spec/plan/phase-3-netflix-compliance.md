@@ -2,7 +2,7 @@
 
 ## Overview
 
-This phase implements the subtitle processor that transforms raw transcription segments into Netflix-compliant subtitle events. This is where the intelligence lives—timing adjustments, text segmentation, and compliance validation.
+This phase implements the subtitle processor that transforms raw transcription segments into Netflix-compliant subtitle events. This handles timing adjustments, text segmentation, and compliance validation.
 
 **Estimated Effort**: 4-5 hours
 **Dependencies**: Phase 2 complete
@@ -11,17 +11,44 @@ This phase implements the subtitle processor that transforms raw transcription s
 
 ## Goals
 
-1. Implement timing validation and adjustment
+1. Validate and adjust subtitle timing
 2. Implement intelligent text segmentation (line breaks)
-3. Implement reading speed (CPS) validation
-4. Generate compliant `Subtitle` events from transcription
+3. Validate reading speed (CPS)
+4. Generate compliant Subtitle events from transcription
 5. Produce compliance reports for user feedback
+
+---
+
+## Architecture
+
+### Processing Flow
+
+```mermaid
+flowchart TD
+    TR[TranscriptionResult] --> SPLIT{Duration > 7s?}
+    SPLIT -->|Yes| DIVIDE[Split Segment]
+    SPLIT -->|No| TIMING
+    DIVIDE --> TIMING[Adjust Timing]
+    TIMING --> TEXT[Segment Text]
+    TEXT --> CPS[Validate CPS]
+    CPS --> SUB[Create Subtitle]
+    SUB --> REPORT[Compliance Report]
+```
+
+### Component Responsibilities
+
+| Component | Input | Output | Responsibility |
+|-----------|-------|--------|----------------|
+| Timing Processor | Segment | Adjusted Segment(s) | Enforce duration limits and gaps |
+| Text Segmenter | Text | Lines (1-2) | Apply line break rules |
+| CPS Validator | Subtitle | Validation Result | Check reading speed |
+| Subtitle Processor | TranscriptionResult | Subtitles + Report | Orchestrate full processing |
 
 ---
 
 ## Architecture Decisions
 
-### Approach: Transform, Don't Mutate
+### Transform, Don't Mutate
 
 **Decision**: Processing creates new subtitle objects rather than modifying transcription segments.
 
@@ -40,7 +67,7 @@ This phase implements the subtitle processor that transforms raw transcription s
 - Can be tuned with configuration
 
 **Alternative Considered**: NLP-based sentence parsing
-- Rejected: Overkill for subtitle line breaks, adds dependency
+- Rejected: Overkill for subtitle line breaks, adds unnecessary dependency
 
 ### CPS Handling
 
@@ -55,320 +82,189 @@ This phase implements the subtitle processor that transforms raw transcription s
 
 ## Components
 
-### 1. Timing Processor (`timing_processor.py`)
+### 1. Timing Processor
 
 **Responsibilities**:
 - Validate subtitle durations (833ms - 7000ms)
 - Ensure minimum gaps between subtitles (83ms)
 - Adjust timings when violations detected
-- Split long segments
+- Split segments that exceed maximum duration
 
-**Interface**:
-```python
-def validate_timing(subtitle: Subtitle, previous_end: timedelta | None) -> TimingValidation:
-    """Check if subtitle timing meets Netflix requirements."""
-
-def adjust_duration(subtitle: Subtitle, min_ms: int = 833) -> Subtitle:
-    """Extend subtitle duration to meet minimum."""
-
-def ensure_gap(subtitle: Subtitle, previous_end: timedelta, min_gap_ms: int = 83) -> Subtitle:
-    """Adjust start time to ensure minimum gap from previous subtitle."""
-
-def split_long_segment(segment: TranscriptionSegment, max_duration_ms: int = 7000) -> list[TranscriptionSegment]:
-    """Split segment that exceeds maximum duration."""
-```
-
-**Timing Rules Implementation**:
+**Timing Rules**:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    TIMING DECISION TREE                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Input: segment (start, end, text)                          │
-│                                                              │
-│  1. Calculate duration = end - start                        │
-│                                                              │
-│  2. IF duration < 833ms:                                    │
-│     └─▶ Extend end = start + 833ms                         │
-│         (unless would overlap next segment)                 │
-│                                                              │
-│  3. IF duration > 7000ms:                                   │
-│     └─▶ Split using word timestamps                        │
-│         └─▶ Find break point near middle                   │
-│         └─▶ Prefer breaking at sentence/clause boundaries  │
-│         └─▶ Create 2+ segments                             │
-│                                                              │
-│  4. IF gap from previous < 83ms:                            │
-│     └─▶ Adjust start = previous.end + 83ms                 │
-│         └─▶ Recalculate duration, may need adjustment      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+IF duration < 833ms:
+    Extend end time to meet minimum
+    (unless would overlap next segment)
+
+IF duration > 7000ms:
+    Split using word timestamps
+    Prefer breaking at sentence/clause boundaries
+    Create multiple segments
+
+IF gap from previous < 83ms:
+    Adjust start time to create gap
+    Recalculate duration
 ```
 
-### 2. Text Segmenter (`text_segmenter.py`)
+**Context**: [netflix-compliance.md](../context/netflix-compliance.md)
+
+### 2. Text Segmenter
 
 **Responsibilities**:
 - Split text into 1-2 lines
 - Respect 42 character per line limit
 - Apply linguistic line break rules
-- Handle text that requires multiple subtitle events
-
-**Interface**:
-```python
-def segment_text(text: str, max_chars_per_line: int = 42) -> list[str]:
-    """
-    Split text into lines for a single subtitle.
-
-    Returns:
-        List of 1-2 lines, each <= max_chars_per_line
-
-    Note:
-        If text cannot fit in 2 lines, only first 84 chars used.
-        Caller should split into multiple subtitles for longer text.
-    """
-
-def find_break_point(text: str, target_position: int) -> int:
-    """
-    Find the best position to break text near target_position.
-
-    Applies Netflix line break rules in priority order.
-    """
-
-def needs_multiple_subtitles(text: str, max_total_chars: int = 84) -> bool:
-    """Check if text requires splitting into multiple subtitle events."""
-```
+- Handle text requiring multiple subtitle events
 
 **Line Break Priority** (from Netflix Style Guide):
 
-```python
-BREAK_AFTER_PRIORITY = [
-    # Priority 1: Punctuation (best breaks)
-    r'[.!?]',           # End of sentence
-    r'[,;:]',           # Clause boundaries
+1. **After punctuation** (. , ! ? :) - Best breaks
+2. **Before conjunctions** (and, but, or, so)
+3. **Before prepositions** (in, on, at, to, for, of, with)
 
-    # Priority 2: Conjunctions
-    r'\s+(and|but|or|so|yet)\s+',
+**Avoid Breaking**:
+- Between article and noun ("the | dog" ❌)
+- Between adjective and noun ("big | house" ❌)
+- Between first and last name
+- Between verb and subject pronoun
 
-    # Priority 3: Prepositions
-    r'\s+(in|on|at|to|for|of|with|from|by)\s+',
-]
-
-AVOID_BREAKING = [
-    r'\b(the|a|an)\s+\w+',      # Article + noun
-    r'\b(very|really|quite)\s+\w+',  # Adverb + adjective
-    # More patterns...
-]
-```
-
-### 3. CPS Validator (`cps_validator.py`)
+### 3. CPS Validator
 
 **Responsibilities**:
 - Calculate characters per second
-- Flag subtitles exceeding limits
-- Suggest adjustments when possible
+- Flag subtitles exceeding limits (20 CPS adult, 17 CPS children)
+- Suggest adjustments when possible (extend duration)
 
-**Interface**:
-```python
-def calculate_cps(subtitle: Subtitle) -> float:
-    """Calculate characters per second for a subtitle."""
-
-def validate_cps(
-    subtitle: Subtitle,
-    max_cps: float = 20.0
-) -> tuple[bool, str | None]:
-    """
-    Validate reading speed.
-
-    Returns:
-        (is_valid, warning_message)
-    """
-
-def suggest_cps_fix(
-    subtitle: Subtitle,
-    max_cps: float,
-    available_extension_ms: int
-) -> Subtitle | None:
-    """
-    Suggest a duration extension to meet CPS target.
-
-    Returns:
-        Adjusted subtitle or None if cannot fix.
-    """
+**CPS Calculation**:
+```
+CPS = total_characters / duration_seconds
 ```
 
-### 4. Subtitle Processor (`subtitle_processor.py`)
+### 4. Subtitle Processor
 
 **Responsibilities**:
-- Orchestrate the full processing pipeline
-- Convert `TranscriptionResult` to `list[Subtitle]`
-- Generate compliance report
+- Orchestrate full processing pipeline
+- Convert TranscriptionResult to list of Subtitles
+- Generate compliance report summarizing issues
 
-**Interface**:
-```python
-def process_transcription(
-    transcription: TranscriptionResult,
-    config: ProcessingConfig
-) -> tuple[list[Subtitle], ComplianceReport]:
-    """
-    Process transcription into Netflix-compliant subtitles.
-
-    Returns:
-        (subtitles, compliance_report)
-    """
-```
-
-**Processing Flow**:
+**Processing Sequence**:
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                    SUBTITLE PROCESSING FLOW                        │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Input: TranscriptionResult.segments                              │
-│                                                                    │
-│  FOR each segment:                                                │
-│    │                                                               │
-│    ├──▶ 1. Check if needs splitting (duration > 7s OR chars > 84)│
-│    │       └─▶ Split into multiple sub-segments                   │
-│    │                                                               │
-│    ├──▶ 2. For each (sub-)segment:                               │
-│    │       │                                                       │
-│    │       ├──▶ Apply timing rules                               │
-│    │       │    └─▶ Adjust duration, ensure gaps                 │
-│    │       │                                                       │
-│    │       ├──▶ Segment text into lines                          │
-│    │       │    └─▶ Apply break rules, max 2 lines               │
-│    │       │                                                       │
-│    │       ├──▶ Validate CPS                                     │
-│    │       │    └─▶ Flag warnings if exceeded                    │
-│    │       │                                                       │
-│    │       └──▶ Create Subtitle object                           │
-│    │                                                               │
-│    └──▶ 3. Add to results, increment index                       │
-│                                                                    │
-│  Output: list[Subtitle], ComplianceReport                         │
-│                                                                    │
-└───────────────────────────────────────────────────────────────────┘
+FOR each segment in transcription:
+    1. Check if needs splitting (duration > 7s OR chars > 84)
+       → Split into sub-segments if needed
+
+    2. For each (sub-)segment:
+       a. Apply timing rules (duration, gaps)
+       b. Segment text into lines (max 2, max 42 chars each)
+       c. Validate CPS (flag warnings if exceeded)
+       d. Create Subtitle object
+
+    3. Add to results, increment index
+
+OUTPUT: list[Subtitle], ComplianceReport
 ```
 
 ---
 
-## Testing Strategy
+## Interface Definitions
 
-### Unit Tests
+### Timing Processor
 
-**Timing Processor**:
-```python
-def test_short_duration_extended():
-    subtitle = make_subtitle(start_ms=0, end_ms=500, text="Hi")
-    adjusted = adjust_duration(subtitle, min_ms=833)
-    assert adjusted.duration_ms == 833
+**validate_timing**:
+- Input: Subtitle, previous_end_time (optional)
+- Output: TimingValidation
 
-def test_long_segment_split():
-    segment = make_segment(start=0, end=10, text="Very long text...")
-    splits = split_long_segment(segment, max_duration_ms=7000)
-    assert len(splits) == 2
-    assert all(s.end - s.start <= 7.0 for s in splits)
+**adjust_duration**:
+- Input: Subtitle, min_ms
+- Output: Subtitle (adjusted)
 
-def test_gap_enforcement():
-    prev_end = timedelta(seconds=5)
-    subtitle = make_subtitle(start_ms=5020, end_ms=7000, text="Next")
-    adjusted = ensure_gap(subtitle, prev_end, min_gap_ms=83)
-    assert adjusted.start_time >= prev_end + timedelta(milliseconds=83)
-```
+**ensure_gap**:
+- Input: Subtitle, previous_end_time, min_gap_ms
+- Output: Subtitle (adjusted)
 
-**Text Segmenter**:
-```python
-def test_short_text_single_line():
-    lines = segment_text("Hello world")
-    assert lines == ["Hello world"]
+**split_long_segment**:
+- Input: TranscriptionSegment, max_duration_ms
+- Output: list of TranscriptionSegment
 
-def test_long_text_two_lines():
-    text = "This is a somewhat longer piece of text that needs two lines"
-    lines = segment_text(text)
-    assert len(lines) == 2
-    assert all(len(line) <= 42 for line in lines)
+### Text Segmenter
 
-def test_break_after_punctuation():
-    text = "Hello, world. This is a test for breaking."
-    lines = segment_text(text)
-    # Should break after period if near middle
-    assert lines[0].endswith('.')
+**segment_text**:
+- Input: text (string), max_chars_per_line
+- Output: list of strings (1-2 lines)
 
-def test_avoid_breaking_article_noun():
-    text = "She walked into the beautiful garden slowly"
-    # Should NOT break between "the" and "beautiful"
-    lines = segment_text(text)
-    assert "the\n" not in "\n".join(lines)
-```
+**needs_multiple_subtitles**:
+- Input: text (string), max_total_chars
+- Output: boolean
 
-**CPS Validator**:
-```python
-def test_cps_calculation():
-    subtitle = make_subtitle(text="Hello world", duration_ms=1000)
-    assert calculate_cps(subtitle) == 11.0  # 11 chars / 1 sec
+### CPS Validator
 
-def test_cps_warning_when_exceeded():
-    subtitle = make_subtitle(text="X" * 25, duration_ms=1000)  # 25 CPS
-    is_valid, warning = validate_cps(subtitle, max_cps=20.0)
-    assert not is_valid
-    assert "25.0" in warning
-```
+**validate_cps**:
+- Input: Subtitle, max_cps
+- Output: (is_valid: boolean, warning_message: optional string)
 
-### Integration Tests
+### Subtitle Processor
 
-```python
-def test_full_processing_pipeline():
-    transcription = TranscriptionResult(
-        language="en",
-        duration=60.0,
-        segments=[...]
-    )
-    subtitles, report = process_transcription(transcription, ProcessingConfig())
+**process_transcription**:
+- Input: TranscriptionResult, ProcessingConfig
+- Output: (list of Subtitle, ComplianceReport)
 
-    assert len(subtitles) > 0
-    assert all(s.duration_ms >= 833 for s in subtitles)
-    assert all(len(line) <= 42 for s in subtitles for line in s.lines)
-```
+---
+
+## Error Handling
+
+| Condition | Behavior |
+|-----------|----------|
+| Empty segment text | Skip segment |
+| Single word > 42 chars | Truncate with ellipsis, add warning |
+| Overlapping timestamps | Adjust to create gaps |
+| No word timestamps | Use segment timing for splits |
+| All caps text | Preserve (don't modify case) |
+
+---
+
+## Edge Cases
+
+| Case | Expected Behavior |
+|------|-------------------|
+| Empty segment | Skip, don't create subtitle |
+| Single very long word | Truncate with ellipsis, warn in report |
+| Overlapping timestamps from Whisper | Adjust to enforce gaps |
+| Consecutive very short segments | Consider merging if combined < 7s |
+| Special characters/Unicode | Preserve, handle in output encoding |
+
+---
+
+## Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Aggressive splitting | Choppy subtitles | Use word timestamps when available |
+| Poor line breaks | Awkward reading | Comprehensive break rules |
+| CPS always exceeded | User annoyance | Make it a warning, not error |
 
 ---
 
 ## Acceptance Criteria
 
 - [ ] Short segments (< 833ms) are extended
-- [ ] Long segments (> 7000ms) are split
+- [ ] Long segments (> 7000ms) are split appropriately
 - [ ] Minimum 83ms gap between consecutive subtitles
 - [ ] Lines respect 42 character limit
 - [ ] Maximum 2 lines per subtitle
 - [ ] Line breaks follow Netflix priority rules
 - [ ] CPS calculated correctly
-- [ ] High CPS subtitles flagged in compliance report
+- [ ] High CPS subtitles flagged in compliance report (not blocked)
 - [ ] Compliance report summarizes all issues
 - [ ] All unit tests pass
 
 ---
 
-## Edge Cases to Handle
+## Dependencies
 
-| Case | Expected Behavior |
-|------|-------------------|
-| Empty segment text | Skip segment |
-| Single word > 42 chars | Truncate with ellipsis, warn |
-| Overlapping timestamps | Adjust to create gaps |
-| No word timestamps | Use segment timing for splits |
-| Consecutive short segments | May merge if combined < 7s |
-| All caps text | Preserve (don't modify case) |
-| Special characters | Preserve Unicode, escape if needed |
-
----
-
-## Performance Considerations
-
-Processing is CPU-bound and fast:
-- 1000 segments: < 100ms
-- No external calls
-- Memory: O(n) where n = number of subtitles
+- [netflix-compliance.md](../context/netflix-compliance.md) - Timing and formatting rules
+- [data-models.md](../context/data-models.md) - Subtitle, ComplianceReport models
 
 ---
 

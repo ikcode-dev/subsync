@@ -2,7 +2,7 @@
 
 ## Overview
 
-This phase establishes the project foundation, including dependency installation, project structure, and core data models. No external service integration yet.
+This phase establishes the project foundation, including dependency installation, project structure, and core data models. This creates the building blocks that all subsequent phases depend on.
 
 **Estimated Effort**: 1-2 hours
 **Dependencies**: None (starting point)
@@ -13,13 +13,13 @@ This phase establishes the project foundation, including dependency installation
 
 1. Set up project dependencies and verify they work
 2. Create the module structure for clean separation of concerns
-3. Implement core data models
-4. Implement YouTube URL parsing and validation
-5. Establish error handling patterns
+3. Define custom error types for granular error handling
+4. Implement core data models
+5. Implement YouTube URL parsing and validation
 
 ---
 
-## Architecture Decisions
+## Architecture
 
 ### Module Structure
 
@@ -27,148 +27,140 @@ This phase establishes the project foundation, including dependency installation
 src/subsync/
 ├── __init__.py          # Package exports
 ├── cli.py               # CLI entry point (exists)
-├── models.py            # Data classes
 ├── errors.py            # Custom exceptions
-├── url_handler.py       # YouTube URL parsing
-└── utils.py             # Shared utilities
+├── models.py            # Data classes
+└── url_handler.py       # YouTube URL parsing
 ```
 
-**Rationale**: Flat structure for simplicity. Can add subdirectories if complexity grows.
+**Rationale**: Flat structure for simplicity. Subdirectories can be added if complexity grows in later phases.
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    URL[YouTube URL] --> Handler[URL Handler]
+    Handler --> VideoID[Video ID]
+    VideoID --> Phase2[Phase 2: Audio Extraction]
+```
+
+---
+
+## Architecture Decisions
 
 ### Data Classes vs Pydantic
 
-**Decision**: Use standard `@dataclass` for now.
+**Decision**: Use standard library `dataclass` for now.
 
 **Rationale**:
 - Simpler, no additional dependency
-- Sufficient for our validation needs
-- Can migrate to Pydantic later if needed
+- Sufficient for current validation needs
+- Can migrate to Pydantic later if needed for advanced validation
+
+**Trade-offs**:
+- Pro: Zero additional dependencies
+- Pro: Familiar Python standard library
+- Con: Less automatic validation than Pydantic
 
 ### Exception Hierarchy
 
 **Decision**: Custom exception hierarchy rooted at `SubSyncError`.
 
 **Rationale**:
-- Enables granular error handling
+- Enables granular error handling at call sites
 - CLI can catch specific exceptions for user-friendly messages
-- Follows Python best practices
+- Follows Python best practices for library design
 
 ---
 
 ## Components
 
-### 1. Dependencies Setup
+### 1. Dependencies
 
-Install and verify all required dependencies:
+Install and verify all required dependencies for audio extraction and transcription.
 
-```bash
-uv add yt-dlp openai-whisper rich
-uv add --group dev pytest pytest-cov
-```
+**Required packages**:
+- `yt-dlp`: YouTube metadata and audio download
+- `openai-whisper`: Speech-to-text transcription
+- `rich`: CLI progress display
 
-Verify FFmpeg is available in PATH.
+**System requirements**:
+- FFmpeg must be available in PATH
 
-### 2. Data Models (`models.py`)
+**Context**: [dependencies.md](../context/dependencies.md)
 
-Implement all models from [data-models.md](../context/data-models.md):
+### 2. Error Definitions
 
-- `VideoMetadata`
-- `Word`, `TranscriptionSegment`, `TranscriptionResult`
-- `Subtitle`, `SubtitleFile`
-- Configuration dataclasses
+Create a custom exception hierarchy that enables:
+- Granular error handling at call sites
+- User-friendly error messages in CLI
+- Clear categorization of failure modes
 
-### 3. Error Definitions (`errors.py`)
+**Error types needed**:
 
-```python
-class SubSyncError(Exception): ...
-class URLParseError(SubSyncError): ...
-class VideoUnavailableError(SubSyncError): ...
-class AgeRestrictedError(SubSyncError): ...
-class LiveStreamError(SubSyncError): ...
-class TranscriptionError(SubSyncError): ...
-```
+| Error | Purpose |
+|-------|---------|
+| SubSyncError | Base for all SubSync errors |
+| URLParseError | Invalid/unsupported YouTube URL |
+| VideoUnavailableError | Video is private, deleted, or region-locked |
+| AgeRestrictedError | Video requires age verification |
+| LiveStreamError | Live streams not supported |
+| TranscriptionError | Audio transcription failures |
 
-### 4. URL Handler (`url_handler.py`)
+### 3. Data Models
 
-**Responsibility**: Parse and validate YouTube URLs, extract video ID.
+Implement all data models defined in the context documentation.
 
-**Supported URL Patterns**:
-- `https://www.youtube.com/watch?v=VIDEO_ID`
-- `https://youtu.be/VIDEO_ID`
-- `https://www.youtube.com/embed/VIDEO_ID`
-- `https://www.youtube.com/v/VIDEO_ID`
-- URLs with additional parameters (playlist, timestamp)
+**Models to implement**:
+- VideoMetadata
+- Word, TranscriptionSegment, TranscriptionResult
+- Subtitle, SubtitleFile
+- TimingValidation, ComplianceReport
+- TranscriptionConfig, ProcessingConfig, OutputConfig
 
-**Interface**:
-```python
-def parse_youtube_url(url: str) -> str:
-    """
-    Extract video ID from YouTube URL.
+**Context**: [data-models.md](../context/data-models.md)
 
-    Args:
-        url: YouTube video URL
+### 4. URL Handler
 
-    Returns:
-        11-character video ID
+Parse and validate YouTube URLs, extracting the video ID.
 
-    Raises:
-        URLParseError: If URL is invalid or not a YouTube URL
-    """
-```
+**Supported URL patterns**:
+- Standard: `https://www.youtube.com/watch?v=VIDEO_ID`
+- Short: `https://youtu.be/VIDEO_ID`
+- Embed: `https://www.youtube.com/embed/VIDEO_ID`
+- Legacy: `https://www.youtube.com/v/VIDEO_ID`
+- With parameters: URLs containing playlist, timestamp, etc.
 
-**Validation Rules**:
-- Video ID is exactly 11 characters
-- Video ID contains only `[a-zA-Z0-9_-]`
-- URL is from youtube.com or youtu.be domain
+**Video ID validation rules**:
+- Exactly 11 characters
+- Only alphanumeric characters plus `-` and `_`
+- Case-sensitive
 
----
-
-## Testing Strategy
-
-### Unit Tests for URL Handler
-
-```python
-# tests/test_url_handler.py
-
-def test_parse_standard_url():
-    assert parse_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
-
-def test_parse_short_url():
-    assert parse_youtube_url("https://youtu.be/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
-
-def test_parse_embed_url():
-    assert parse_youtube_url("https://www.youtube.com/embed/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
-
-def test_parse_with_extra_params():
-    assert parse_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42") == "dQw4w9WgXcQ"
-
-def test_invalid_url_raises():
-    with pytest.raises(URLParseError):
-        parse_youtube_url("https://vimeo.com/12345")
-
-def test_invalid_video_id_raises():
-    with pytest.raises(URLParseError):
-        parse_youtube_url("https://www.youtube.com/watch?v=short")
-```
-
-### Model Tests
-
-- Test dataclass instantiation
-- Test computed properties (cps, duration_ms, char_count)
-- Test model serialization if needed
+**Context**: [youtube-compatibility.md](../context/youtube-compatibility.md)
 
 ---
 
-## Acceptance Criteria
+## Interface Definitions
 
-- [ ] All dependencies installed successfully
-- [ ] FFmpeg available and verified
-- [ ] Models importable from `subsync.models`
-- [ ] Errors importable from `subsync.errors`
-- [ ] URL handler parses all supported formats
-- [ ] URL handler rejects invalid URLs with clear errors
-- [ ] All unit tests pass
-- [ ] `task lint` passes with no errors
+### URL Handler
+
+**Inputs**:
+- YouTube video URL (string)
+
+**Outputs**:
+- 11-character video ID (string)
+
+**Errors**:
+- URLParseError when URL is invalid or not from YouTube
+
+---
+
+## Error Handling
+
+| Error Condition | Error Type | User Message |
+|-----------------|------------|--------------|
+| URL not from YouTube domain | URLParseError | "Not a YouTube URL" |
+| No video ID in URL | URLParseError | "URL does not contain a video ID" |
+| Invalid video ID format | URLParseError | "Invalid video ID format" |
 
 ---
 
@@ -182,6 +174,27 @@ def test_invalid_video_id_raises():
 
 ---
 
+## Acceptance Criteria
+
+- [ ] All dependencies installed successfully
+- [ ] FFmpeg available and verified
+- [ ] All error types defined and importable
+- [ ] All models defined and importable with correct computed properties
+- [ ] URL handler parses all supported URL formats
+- [ ] URL handler rejects invalid URLs with clear error messages
+- [ ] All unit tests pass
+- [ ] Linting passes with no errors
+
+---
+
+## Dependencies
+
+- [data-models.md](../context/data-models.md) - Model definitions
+- [dependencies.md](../context/dependencies.md) - Package information
+- [youtube-compatibility.md](../context/youtube-compatibility.md) - URL patterns
+
+---
+
 ## Next Phase
 
-After Phase 1 completion, proceed to [Phase 2: Core Pipeline](./phase-2-core-pipeline.md) which implements the audio extraction and transcription modules.
+After Phase 1 completion, proceed to [Phase 2: Core Pipeline](./phase-2-core-pipeline.md) which implements audio extraction and transcription.

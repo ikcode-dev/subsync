@@ -11,11 +11,39 @@ This phase implements the core processing pipeline: extracting audio from YouTub
 
 ## Goals
 
-1. Implement video metadata extraction via yt-dlp
-2. Implement audio download and extraction
-3. Implement Whisper transcription integration
+1. Extract video metadata via yt-dlp
+2. Download and convert audio to optimal format
+3. Transcribe audio using Whisper with timestamps
 4. Establish temporary file management
 5. Add progress reporting infrastructure
+
+---
+
+## Architecture
+
+### Pipeline Flow
+
+```mermaid
+flowchart LR
+    VID[Video ID] --> META[Get Metadata]
+    META --> DL[Download Audio]
+    DL --> WAV[Convert to WAV]
+    WAV --> TR[Transcribe]
+    TR --> RESULT[TranscriptionResult]
+
+    subgraph "Temp Directory"
+        WAV
+    end
+```
+
+### Component Responsibilities
+
+| Component | Input | Output | Responsibility |
+|-----------|-------|--------|----------------|
+| Audio Extractor | Video ID | VideoMetadata | Extract video information |
+| Audio Extractor | Video ID, Output Dir | Audio File Path | Download and convert audio |
+| Transcriber | Audio Path, Config | TranscriptionResult | Speech-to-text with timestamps |
+| Pipeline Orchestrator | URL | TranscriptionResult | Coordinate full pipeline |
 
 ---
 
@@ -23,20 +51,12 @@ This phase implements the core processing pipeline: extracting audio from YouTub
 
 ### Temporary File Management
 
-**Decision**: Use Python's `tempfile` module with context managers.
+**Decision**: Use context managers for automatic cleanup.
 
 **Rationale**:
 - Automatic cleanup on success or failure
 - Cross-platform compatibility
 - No orphaned files on crashes
-
-**Pattern**:
-```python
-with tempfile.TemporaryDirectory() as tmpdir:
-    audio_path = download_audio(video_id, tmpdir)
-    result = transcribe(audio_path)
-# Automatic cleanup here
-```
 
 ### Whisper Model Selection
 
@@ -47,9 +67,14 @@ with tempfile.TemporaryDirectory() as tmpdir:
 - ~6GB VRAM fits most modern GPUs
 - 8x faster than large-v3 with similar quality
 
+**Trade-offs**:
+- Pro: Fast processing
+- Pro: Good accuracy for most content
+- Con: Requires GPU for reasonable speed
+
 ### Audio Format
 
-**Decision**: Extract to WAV format (16kHz, mono).
+**Decision**: Convert to WAV format (16kHz, mono).
 
 **Rationale**:
 - Whisper's optimal input format
@@ -60,224 +85,116 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 ## Components
 
-### 1. Audio Extractor (`audio_extractor.py`)
+### 1. Audio Extractor
 
 **Responsibilities**:
-- Extract video metadata without downloading
-- Download audio stream
-- Convert to Whisper-optimal format
+- Extract video metadata without downloading video
+- Download audio stream only
+- Convert to Whisper-optimal format (16kHz mono WAV)
+- Report download progress
 
-**Interface**:
-```python
-def get_video_metadata(video_id: str) -> VideoMetadata:
-    """
-    Extract metadata for a YouTube video.
+**Behavior**:
 
-    Raises:
-        VideoUnavailableError: Video doesn't exist or is private
-        AgeRestrictedError: Requires age verification
-        LiveStreamError: Live streams not supported
-    """
-
-def download_audio(
-    video_id: str,
-    output_dir: Path,
-    progress_callback: Callable[[float], None] | None = None
-) -> Path:
-    """
-    Download and extract audio from YouTube video.
-
-    Returns:
-        Path to the extracted WAV file
-    """
 ```
+GIVEN a valid video ID
+WHEN extracting metadata
+THEN return VideoMetadata with title, duration, uploader, upload_date
 
-**yt-dlp Configuration**:
-```python
-ydl_opts = {
-    'format': 'bestaudio/best',
-    'outtmpl': str(output_dir / '%(id)s.%(ext)s'),
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'wav',
-    }],
-    'postprocessor_args': [
-        '-ar', '16000',  # 16kHz sample rate
-        '-ac', '1',      # Mono
-    ],
-    'quiet': True,
-    'no_warnings': True,
-    'progress_hooks': [progress_hook] if progress_callback else [],
-}
+GIVEN an unavailable video ID
+WHEN extracting metadata
+THEN raise appropriate error (VideoUnavailableError, AgeRestrictedError, etc.)
+
+GIVEN a video ID and output directory
+WHEN downloading audio
+THEN save WAV file to output directory and return path
 ```
 
 **Error Mapping**:
-| yt-dlp Error | SubSync Error |
-|--------------|---------------|
-| Video unavailable | `VideoUnavailableError` |
-| Private video | `VideoUnavailableError` |
-| Age-restricted | `AgeRestrictedError` |
-| Live stream | `LiveStreamError` |
 
-### 2. Transcriber (`transcriber.py`)
+| yt-dlp Condition | SubSync Error |
+|------------------|---------------|
+| Video unavailable | VideoUnavailableError |
+| Private video | VideoUnavailableError |
+| Age-restricted | AgeRestrictedError |
+| Live stream | LiveStreamError |
 
-**Responsibilities**:
-- Load Whisper model (with caching)
-- Transcribe audio to text with timestamps
-- Handle GPU/CPU fallback
-
-**Interface**:
-```python
-def transcribe_audio(
-    audio_path: Path,
-    config: TranscriptionConfig,
-    progress_callback: Callable[[float], None] | None = None
-) -> TranscriptionResult:
-    """
-    Transcribe audio file to text with timestamps.
-
-    Args:
-        audio_path: Path to audio file (WAV recommended)
-        config: Transcription settings
-        progress_callback: Optional progress reporting (0.0-1.0)
-
-    Returns:
-        TranscriptionResult with segments and word timestamps
-
-    Raises:
-        TranscriptionError: If transcription fails
-    """
-```
-
-**Implementation Notes**:
-```python
-import whisper
-
-# Model caching (load once, reuse)
-_model_cache: dict[str, whisper.Whisper] = {}
-
-def _get_model(model_name: str, device: str) -> whisper.Whisper:
-    cache_key = f"{model_name}:{device}"
-    if cache_key not in _model_cache:
-        _model_cache[cache_key] = whisper.load_model(model_name, device=device)
-    return _model_cache[cache_key]
-```
-
-**Whisper Options**:
-```python
-result = model.transcribe(
-    str(audio_path),
-    language=config.language,  # None for auto-detect
-    task="transcribe",
-    word_timestamps=config.word_timestamps,
-    verbose=False,
-)
-```
-
-### 3. Pipeline Orchestrator (`pipeline.py`)
+### 2. Transcriber
 
 **Responsibilities**:
-- Coordinate the full processing pipeline
-- Manage temporary files
-- Report overall progress
+- Load Whisper model (with caching for reuse)
+- Transcribe audio with word-level timestamps
+- Handle GPU/CPU device selection and fallback
+- Report transcription progress
 
-**Interface**:
-```python
-def process_video(
-    url: str,
-    config: ProcessingConfig,
-    progress_callback: Callable[[str, float], None] | None = None
-) -> TranscriptionResult:
-    """
-    Full pipeline: URL → Audio → Transcription.
+**Behavior**:
 
-    Args:
-        url: YouTube video URL
-        config: Processing configuration
-        progress_callback: (stage_name, progress) callback
-
-    Returns:
-        TranscriptionResult ready for subtitle processing
-    """
 ```
+GIVEN an audio file path and config
+WHEN transcribing
+THEN return TranscriptionResult with segments and word timestamps
+
+GIVEN a config with language=null
+WHEN transcribing
+THEN auto-detect language and include in result
+
+GIVEN GPU unavailable
+WHEN loading model with device="auto"
+THEN fall back to CPU automatically
+```
+
+### 3. Pipeline Orchestrator
+
+**Responsibilities**:
+- Coordinate the full URL → Transcription flow
+- Manage temporary directory lifecycle
+- Report overall progress across stages
+- Ensure cleanup on success or failure
 
 **Pipeline Stages**:
+
+```
 1. Parse URL → Extract video ID
-2. Get metadata → Validate video availability
-3. Download audio → Progress: 0-50%
+2. Get Metadata → Validate video availability
+3. Download Audio → Progress: 0-50%
 4. Transcribe → Progress: 50-100%
 5. Cleanup → Automatic via context manager
-
----
-
-## Testing Strategy
-
-### Unit Tests
-
-**Audio Extractor** (mocked yt-dlp):
-```python
-def test_get_metadata_returns_video_info(mock_ytdlp):
-    mock_ytdlp.return_value = {'id': 'abc123', 'title': 'Test', ...}
-    metadata = get_video_metadata('abc123')
-    assert metadata.id == 'abc123'
-
-def test_private_video_raises_error(mock_ytdlp):
-    mock_ytdlp.side_effect = DownloadError('Private video')
-    with pytest.raises(VideoUnavailableError):
-        get_video_metadata('private123')
-```
-
-**Transcriber** (mocked Whisper):
-```python
-def test_transcribe_returns_segments(mock_whisper):
-    mock_whisper.transcribe.return_value = {
-        'text': 'Hello world',
-        'segments': [{'start': 0, 'end': 1, 'text': 'Hello world'}]
-    }
-    result = transcribe_audio(Path('test.wav'), TranscriptionConfig())
-    assert len(result.segments) == 1
-```
-
-### Integration Tests (Optional, Slow)
-
-```python
-@pytest.mark.integration
-@pytest.mark.slow
-def test_full_pipeline_with_real_video():
-    """Test with a short, public domain video."""
-    result = process_video(
-        "https://www.youtube.com/watch?v=SHORT_PUBLIC_VIDEO",
-        ProcessingConfig()
-    )
-    assert len(result.segments) > 0
 ```
 
 ---
 
-## Progress Reporting
+## Interface Definitions
 
-**Console Output** (via `rich`):
-```
-[1/4] Fetching video metadata...
-[2/4] Downloading audio... ━━━━━━━━━━━━━━━━━━━━ 100%
-[3/4] Transcribing audio... ━━━━━━━━━━━━━━━━━━━━ 100%
-[4/4] Processing complete!
-```
+### Audio Extractor
+
+**get_video_metadata**:
+- Input: video_id (string)
+- Output: VideoMetadata
+- Errors: VideoUnavailableError, AgeRestrictedError, LiveStreamError
+
+**download_audio**:
+- Input: video_id (string), output_dir (path), progress_callback (optional)
+- Output: Path to WAV file
+- Errors: VideoUnavailableError, network errors
+
+### Transcriber
+
+**transcribe_audio**:
+- Input: audio_path (path), config (TranscriptionConfig), progress_callback (optional)
+- Output: TranscriptionResult
+- Errors: TranscriptionError
 
 ---
 
-## Acceptance Criteria
+## Error Handling
 
-- [ ] Can extract metadata from public YouTube videos
-- [ ] Can download and extract audio to WAV
-- [ ] Can transcribe audio with Whisper
-- [ ] Word timestamps are included when available
-- [ ] Language auto-detection works
-- [ ] GPU used when available, CPU fallback works
-- [ ] Temporary files are cleaned up
-- [ ] Progress is reported during long operations
-- [ ] All unit tests pass
-- [ ] Error cases produce clear, actionable messages
+| Error Condition | Error Type | Recovery |
+|-----------------|------------|----------|
+| Video not found | VideoUnavailableError | User message with URL check suggestions |
+| Private video | VideoUnavailableError | User message about privacy |
+| Age-restricted | AgeRestrictedError | User message (no workaround without cookies) |
+| Live stream | LiveStreamError | User message to wait for completion |
+| Model load failure | TranscriptionError | Fallback to smaller model or CPU |
+| Network timeout | Retry with backoff, then fail |
 
 ---
 
@@ -294,16 +211,38 @@ def test_full_pipeline_with_real_video():
 
 ## Performance Considerations
 
-| Video Length | Download Time | Transcribe Time (turbo, GPU) |
-|--------------|---------------|------------------------------|
+| Video Length | Expected Download Time | Expected Transcribe Time (turbo, GPU) |
+|--------------|------------------------|---------------------------------------|
 | 5 min | ~30s | ~30s |
 | 30 min | ~2 min | ~3 min |
 | 2 hours | ~10 min | ~15 min |
 
 **Recommendations**:
 - Show progress for operations > 5 seconds
-- Consider async processing for very long videos
-- Document expected processing times
+- Document expected processing times for users
+- Consider async processing for very long videos (future enhancement)
+
+---
+
+## Acceptance Criteria
+
+- [ ] Can extract metadata from public YouTube videos
+- [ ] Can download and extract audio to WAV format
+- [ ] Can transcribe audio with Whisper
+- [ ] Word timestamps are included when available
+- [ ] Language auto-detection works
+- [ ] GPU used when available, CPU fallback works
+- [ ] Temporary files are cleaned up automatically
+- [ ] Progress is reported during long operations
+- [ ] All unit tests pass
+- [ ] Error cases produce clear, actionable messages
+
+---
+
+## Dependencies
+
+- [dependencies.md](../context/dependencies.md) - yt-dlp and Whisper details
+- [data-models.md](../context/data-models.md) - VideoMetadata, TranscriptionResult
 
 ---
 

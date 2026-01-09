@@ -19,6 +19,33 @@ This phase completes the application by implementing the subtitle file writer, C
 
 ---
 
+## Architecture
+
+### Output Flow
+
+```mermaid
+flowchart LR
+    SUB[Subtitles] --> WRITER[Subtitle Writer]
+    WRITER --> SRT[SRT File]
+    WRITER --> VTT[VTT File]
+
+    subgraph "CLI"
+        ARGS[Parse Args] --> PIPELINE[Run Pipeline]
+        PIPELINE --> DISPLAY[Display Progress]
+        DISPLAY --> REPORT[Show Report]
+    end
+```
+
+### Component Responsibilities
+
+| Component | Input | Output | Responsibility |
+|-----------|-------|--------|----------------|
+| Subtitle Writer | Subtitles, Format | File | Generate SRT/VTT files |
+| CLI | User Args | Exit Code | Orchestrate user interaction |
+| Progress Display | Stage, Percent | Console Output | Show progress to user |
+
+---
+
 ## Architecture Decisions
 
 ### CLI Framework
@@ -27,9 +54,13 @@ This phase completes the application by implementing the subtitle file writer, C
 
 **Rationale**:
 - No additional CLI framework dependency
-- `argparse` is sufficient for our needs
-- `rich` provides beautiful progress bars and output
+- `argparse` is sufficient for current needs
+- `rich` provides beautiful progress bars and formatted output
 - Can migrate to `typer` or `click` later if needed
+
+**Trade-offs**:
+- Pro: Minimal dependencies
+- Con: More verbose than typer/click
 
 ### Output File Naming
 
@@ -38,7 +69,7 @@ This phase completes the application by implementing the subtitle file writer, C
 **Example**: `My Video Title.en.srt`
 
 **Rationale**:
-- Includes language code for multi-language support
+- Includes language code for multi-language support (future)
 - Title makes files identifiable
 - Standard extension for format recognition
 
@@ -57,305 +88,135 @@ This phase completes the application by implementing the subtitle file writer, C
 
 ## Components
 
-### 1. Subtitle Writer (`subtitle_writer.py`)
+### 1. Subtitle Writer
 
 **Responsibilities**:
 - Generate SRT format output
 - Generate VTT format output
 - Handle file encoding (UTF-8)
-
-**Interface**:
-```python
-def write_srt(subtitles: list[Subtitle], output_path: Path) -> None:
-    """Write subtitles to SRT file."""
-
-def write_vtt(subtitles: list[Subtitle], output_path: Path) -> None:
-    """Write subtitles to VTT file."""
-
-def format_srt_time(td: timedelta) -> str:
-    """Format timedelta as SRT timestamp: HH:MM:SS,mmm"""
-
-def format_vtt_time(td: timedelta) -> str:
-    """Format timedelta as VTT timestamp: HH:MM:SS.mmm"""
-
-def write_subtitles(
-    subtitles: list[Subtitle],
-    output_path: Path,
-    format: str = "srt"
-) -> None:
-    """Write subtitles to file in specified format."""
-```
+- Sanitize filenames for cross-platform compatibility
 
 **SRT Format**:
 ```
-1
-00:00:00,000 --> 00:00:02,500
-Hello everyone and welcome
-to today's video.
+[index]
+[start] --> [end]
+[line 1]
+[line 2 (optional)]
 
-2
-00:00:02,583 --> 00:00:05,000
-Today we're going to discuss
-something very important.
 ```
+Time format: `HH:MM:SS,mmm` (comma separator)
 
 **VTT Format**:
 ```
 WEBVTT
 
-00:00:00.000 --> 00:00:02.500
-Hello everyone and welcome
-to today's video.
+[start] --> [end]
+[line 1]
+[line 2 (optional)]
 
-00:00:02.583 --> 00:00:05.000
-Today we're going to discuss
-something very important.
 ```
+Time format: `HH:MM:SS.mmm` (period separator)
 
-### 2. CLI Implementation (`cli.py`)
+**Context**: [youtube-compatibility.md](../context/youtube-compatibility.md)
+
+### 2. CLI Interface
 
 **Command Structure**:
 ```
 subsync generate <youtube_url> [OPTIONS]
 ```
 
+**Arguments**:
+- `youtube_url`: YouTube video URL (required)
+
 **Options**:
-```
-Arguments:
-  youtube_url            YouTube video URL (required)
 
-Options:
-  -l, --language TEXT    Audio language code (default: auto-detect)
-  -o, --output PATH      Output file path (default: ./{title}.{lang}.srt)
-  -f, --format TEXT      Output format: srt, vtt (default: srt)
-  -m, --model TEXT       Whisper model: tiny, base, small, medium, large-v3, turbo
-                         (default: turbo)
-  --children             Apply stricter reading speed for children's content
-  -v, --verbose          Show detailed progress and debug info
-  --version              Show version and exit
-  --help                 Show this help message
-```
-
-**Implementation Skeleton**:
-```python
-import argparse
-import sys
-from rich.console import Console
-from rich.progress import Progress
-
-console = Console()
-
-def main() -> int:
-    parser = create_parser()
-    args = parser.parse_args()
-
-    try:
-        return run_generate(args)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled by user[/yellow]")
-        return 1
-    except SubSyncError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        return e.exit_code
-
-def run_generate(args) -> int:
-    """Execute the generate command."""
-    with Progress(...) as progress:
-        # 1. Parse URL
-        # 2. Get metadata
-        # 3. Download audio
-        # 4. Transcribe
-        # 5. Process subtitles
-        # 6. Write output
-        # 7. Show summary
-    return 0
-```
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-l, --language` | Audio language code | auto-detect |
+| `-o, --output` | Output file path | ./{title}.{lang}.srt |
+| `-f, --format` | Output format (srt, vtt) | srt |
+| `-m, --model` | Whisper model name | turbo |
+| `--children` | Apply stricter CPS for children's content | false |
+| `-v, --verbose` | Show detailed progress | false |
+| `--version` | Show version | - |
+| `--help` | Show help | - |
 
 ### 3. Progress Display
-
-**Using `rich` Progress**:
-```python
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-    TimeRemainingColumn,
-)
-
-def create_progress() -> Progress:
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    )
-```
 
 **Expected Output**:
 ```
 ⠋ Fetching video metadata...
 ✓ Video: "Introduction to Python" (12:34)
 
-⠋ Downloading audio... ━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+⠋ Downloading audio... ━━━━━━━━━━━━━━━━━━━━ 100%
 ✓ Audio extracted
 
-⠋ Transcribing audio... ━━━━━━━━━━━━━━━━━━━━ 100% 0:00:12
+⠋ Transcribing audio... ━━━━━━━━━━━━━━━━━━━━ 100%
 ✓ Transcription complete (45 segments)
 
 ⠋ Processing subtitles...
 ✓ Generated 52 subtitles
 
 Output: Introduction to Python.en.srt
-
-Compliance Report:
-  ✓ All timing requirements met
-  ⚠ 3 subtitles exceed recommended reading speed (20 CPS)
 ```
 
 ### 4. Error Messages
 
-**User-Friendly Error Display**:
-```python
-ERROR_MESSAGES = {
-    VideoUnavailableError: (
-        "Video not found or unavailable.\n"
-        "Please check:\n"
-        "  • The URL is correct\n"
-        "  • The video is public\n"
-        "  • The video hasn't been deleted"
-    ),
-    AgeRestrictedError: (
-        "This video requires age verification.\n"
-        "SubSync cannot process age-restricted content."
-    ),
-    LiveStreamError: (
-        "Live streams are not supported.\n"
-        "Please wait for the stream to end and try again."
-    ),
-    TranscriptionError: (
-        "Transcription failed.\n"
-        "Try:\n"
-        "  • Using a smaller model (--model small)\n"
-        "  • Checking if the video has clear audio"
-    ),
-}
-```
+User-friendly error display for each error type:
+
+| Error Type | Message Theme |
+|------------|---------------|
+| VideoUnavailableError | Check URL, video may be private/deleted |
+| AgeRestrictedError | Age verification required, not supported |
+| LiveStreamError | Wait for stream to end |
+| TranscriptionError | Try smaller model, check audio quality |
+| URLParseError | Invalid URL format |
 
 ### 5. Filename Sanitization
 
-```python
-import re
-
-def sanitize_filename(title: str, max_length: int = 100) -> str:
-    """
-    Create a safe filename from video title.
-
-    Removes/replaces characters that are invalid in filenames.
-    """
-    # Remove characters invalid on any OS
-    sanitized = re.sub(r'[<>:"/\\|?*]', '', title)
-    # Replace multiple spaces/underscores with single space
-    sanitized = re.sub(r'[\s_]+', ' ', sanitized)
-    # Trim whitespace
-    sanitized = sanitized.strip()
-    # Truncate if too long
-    if len(sanitized) > max_length:
-        sanitized = sanitized[:max_length].rsplit(' ', 1)[0]
-    return sanitized or "subtitles"
-```
+**Rules**:
+- Remove characters invalid on any OS: `< > : " / \ | ? *`
+- Replace multiple spaces with single space
+- Trim whitespace
+- Truncate to reasonable length (100 chars)
+- Fallback to "subtitles" if title becomes empty
 
 ---
 
-## Testing Strategy
+## Interface Definitions
 
-### Unit Tests
+### Subtitle Writer
 
-**Subtitle Writer**:
-```python
-def test_format_srt_time():
-    td = timedelta(hours=1, minutes=23, seconds=45, milliseconds=678)
-    assert format_srt_time(td) == "01:23:45,678"
+**write_srt**:
+- Input: list of Subtitle, output_path
+- Output: None (writes file)
+- Errors: IOError on write failure
 
-def test_format_vtt_time():
-    td = timedelta(seconds=90, milliseconds=500)
-    assert format_vtt_time(td) == "00:01:30.500"
+**write_vtt**:
+- Input: list of Subtitle, output_path
+- Output: None (writes file)
 
-def test_write_srt_creates_valid_file(tmp_path):
-    subtitles = [make_subtitle(index=1, text="Hello")]
-    output = tmp_path / "test.srt"
-    write_srt(subtitles, output)
+**format_srt_time**:
+- Input: timedelta
+- Output: string "HH:MM:SS,mmm"
 
-    content = output.read_text()
-    assert "1\n" in content
-    assert "Hello" in content
-    assert "-->" in content
+**format_vtt_time**:
+- Input: timedelta
+- Output: string "HH:MM:SS.mmm"
 
-def test_sanitize_filename():
-    assert sanitize_filename("My Video: Part 1") == "My Video Part 1"
-    assert sanitize_filename("Test???") == "Test"
-```
+### CLI
 
-**CLI** (using subprocess or click testing):
-```python
-def test_cli_help():
-    result = subprocess.run(["subsync", "--help"], capture_output=True)
-    assert result.returncode == 0
-    assert "generate" in result.stdout.decode()
-
-def test_cli_invalid_url():
-    result = subprocess.run(
-        ["subsync", "generate", "not-a-url"],
-        capture_output=True
-    )
-    assert result.returncode == 2
-```
-
-### End-to-End Test
-
-```python
-@pytest.mark.e2e
-@pytest.mark.slow
-def test_full_generate_command(tmp_path):
-    """Test complete flow with a short public video."""
-    output = tmp_path / "output.srt"
-    result = subprocess.run([
-        "subsync", "generate",
-        "https://www.youtube.com/watch?v=SHORT_PUBLIC_VIDEO",
-        "-o", str(output),
-        "--model", "tiny"  # Fast for testing
-    ], capture_output=True)
-
-    assert result.returncode == 0
-    assert output.exists()
-    content = output.read_text()
-    assert "1\n" in content
-    assert "-->" in content
-```
+**main**:
+- Input: sys.argv (implicit)
+- Output: exit code (int)
 
 ---
 
-## Acceptance Criteria
-
-- [ ] `subsync generate <url>` works end-to-end
-- [ ] SRT files are valid and uploadable to YouTube
-- [ ] VTT files are valid (when `--format vtt`)
-- [ ] Progress is displayed during processing
-- [ ] Compliance report shown after generation
-- [ ] Errors display helpful, actionable messages
-- [ ] `--help` shows complete usage information
-- [ ] Exit codes are correct for different error types
-- [ ] Output filename is safe for all operating systems
-- [ ] `--verbose` shows additional debug information
-
----
-
-## User Experience Polish
+## User Experience
 
 ### Success Output
+
 ```
 ✓ Subtitles generated successfully!
 
@@ -372,6 +233,7 @@ def test_full_generate_command(tmp_path):
 ```
 
 ### Error Output
+
 ```
 ✗ Error: Video not found or unavailable
 
@@ -385,25 +247,70 @@ def test_full_generate_command(tmp_path):
 
 ---
 
+## Error Handling
+
+| Error Condition | Exit Code | User Guidance |
+|-----------------|-----------|---------------|
+| Invalid URL | 2 | Show expected URL formats |
+| Video unavailable | 3 | Check URL, privacy, deletion |
+| Transcription fails | 4 | Try smaller model, check audio |
+| Cannot write file | 5 | Check permissions, disk space |
+| User cancellation (Ctrl+C) | 1 | Clean up temp files |
+
+---
+
+## Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Long processing time | User cancels | Show progress with ETA |
+| Disk full during write | Lost work | Check space before writing |
+| Invalid filename chars | Cross-platform issues | Sanitize all titles |
+
+---
+
+## Acceptance Criteria
+
+- [ ] `subsync generate <url>` works end-to-end
+- [ ] SRT files are valid and uploadable to YouTube
+- [ ] VTT files are valid (when `--format vtt`)
+- [ ] Progress is displayed during processing
+- [ ] Compliance report shown after generation
+- [ ] Errors display helpful, actionable messages
+- [ ] `--help` shows complete usage information
+- [ ] Exit codes are correct for different error types
+- [ ] Output filename is safe for all operating systems
+- [ ] `--verbose` shows additional debug information
+- [ ] Keyboard interrupt (Ctrl+C) handled gracefully
+
+---
+
 ## Documentation Updates
 
 After Phase 4, update:
 
 1. **README.md**: Installation, quick start, examples
-2. **--help**: Ensure comprehensive and accurate
+2. **--help**: Comprehensive and accurate
 3. **CHANGELOG.md**: Document initial release
 
 ---
 
 ## Future Enhancements (Post-MVP)
 
-Not in scope for Phase 4, but designed for:
+Not in scope for Phase 4, but system designed to support:
 
-- [ ] `subsync translate` command
-- [ ] Batch processing multiple videos
-- [ ] Configuration file support
-- [ ] Custom Netflix profile selection
-- [ ] SRT/VTT input for re-processing
+- `subsync translate` command
+- Batch processing multiple videos
+- Configuration file support
+- Custom compliance profile selection
+- SRT/VTT input for re-processing
+
+---
+
+## Dependencies
+
+- [youtube-compatibility.md](../context/youtube-compatibility.md) - SRT/VTT format specs
+- [data-models.md](../context/data-models.md) - Subtitle, SubtitleFile models
 
 ---
 
@@ -413,8 +320,6 @@ After all phases complete:
 
 - [ ] All unit tests pass
 - [ ] All integration tests pass
-- [ ] `task lint` passes
-- [ ] `task format` produces no changes
+- [ ] Linting passes
 - [ ] README updated with usage instructions
 - [ ] Manual testing with 3+ different videos
-- [ ] Test on macOS, Linux, Windows (if available)
