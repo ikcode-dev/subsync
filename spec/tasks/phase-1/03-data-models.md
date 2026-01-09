@@ -214,15 +214,15 @@ class TestConfigDefaults:
 
 ## Verification Checklist
 
-- [ ] File created at `src/subsync/models.py`
-- [ ] All 11 model classes implemented
-- [ ] All type hints present
-- [ ] All docstrings present
-- [ ] `Subtitle` computed properties work correctly
-- [ ] Configuration defaults match spec
-- [ ] Tests created at `tests/test_models.py`
-- [ ] `task test` passes
-- [ ] `task lint` passes
+- [x] File created at `src/subsync/models.py`
+- [x] All 11 model classes implemented
+- [x] All type hints present
+- [x] All docstrings present
+- [x] `Subtitle` computed properties work correctly
+- [x] Configuration defaults match spec
+- [x] Tests created at `tests/test_models.py`
+- [x] `task test` passes
+- [x] `task lint` passes
 
 ### Quick Import Test
 
