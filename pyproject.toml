@@ -11,7 +11,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "openai-whisper>=20250625",
+    "rich>=14.2.0",
+    "yt-dlp>=2025.12.8",
+]
 
 [project.scripts]
 subsync = "subsync.cli:main"
@@ -23,5 +27,6 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
     "ruff>=0.14.6",
 ]
