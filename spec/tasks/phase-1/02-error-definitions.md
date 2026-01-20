@@ -90,12 +90,12 @@ except SubSyncError as e:
 
 ## Acceptance Criteria
 
-- [ ] File exists at `src/subsync/errors.py`
-- [ ] All 6 exception classes implemented
-- [ ] All exceptions inherit from `SubSyncError`
-- [ ] All exceptions have docstrings
-- [ ] All exceptions importable: `from subsync.errors import SubSyncError, URLParseError, ...`
-- [ ] `task lint` passes
+- [x] File exists at `src/subsync/errors.py`
+- [x] All 6 exception classes implemented
+- [x] All exceptions inherit from `SubSyncError`
+- [x] All exceptions have docstrings
+- [x] All exceptions importable: `from subsync.errors import SubSyncError, URLParseError, ...`
+- [x] `task lint` passes
 
 ---
 
@@ -113,15 +113,15 @@ except SubSyncError as e:
 
 ## Implementation Checklist
 
-1. [ ] Create file: `src/subsync/errors.py`
-2. [ ] Define: `SubSyncError(Exception)` with docstring
-3. [ ] Define: `URLParseError(SubSyncError)` with docstring
-4. [ ] Define: `VideoUnavailableError(SubSyncError)` with docstring
-5. [ ] Define: `AgeRestrictedError(SubSyncError)` with docstring
-6. [ ] Define: `LiveStreamError(SubSyncError)` with docstring
-7. [ ] Define: `TranscriptionError(SubSyncError)` with docstring
-8. [ ] Verify imports: `uv run python -c "from subsync.errors import SubSyncError, URLParseError, VideoUnavailableError, AgeRestrictedError, LiveStreamError, TranscriptionError; print('OK')"`
-9. [ ] Run: `task lint` — verify pass
+1. [x] Create file: `src/subsync/errors.py`
+2. [x] Define: `SubSyncError(Exception)` with docstring
+3. [x] Define: `URLParseError(SubSyncError)` with docstring
+4. [x] Define: `VideoUnavailableError(SubSyncError)` with docstring
+5. [x] Define: `AgeRestrictedError(SubSyncError)` with docstring
+6. [x] Define: `LiveStreamError(SubSyncError)` with docstring
+7. [x] Define: `TranscriptionError(SubSyncError)` with docstring
+8. [x] Verify imports: `uv run python -c "from subsync.errors import SubSyncError, URLParseError, VideoUnavailableError, AgeRestrictedError, LiveStreamError, TranscriptionError; print('OK')"`
+9. [x] Run: `task lint` — verify pass
 
 ---
 
