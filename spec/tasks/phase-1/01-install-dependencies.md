@@ -66,14 +66,14 @@ FFmpeg must be available in PATH (required by yt-dlp and Whisper).
 
 ## Acceptance Criteria
 
-- [ ] All dependencies listed in `pyproject.toml`
-- [ ] `uv sync` completes without errors
-- [ ] `import yt_dlp` succeeds in Python
-- [ ] `import whisper` succeeds in Python
-- [ ] `import rich` succeeds in Python
-- [ ] `import pytest` succeeds in Python
-- [ ] `ffmpeg -version` returns version info
-- [ ] `task lint` passes
+- [x] All dependencies listed in `pyproject.toml`
+- [x] `uv sync` completes without errors
+- [x] `import yt_dlp` succeeds in Python
+- [x] `import whisper` succeeds in Python
+- [x] `import rich` succeeds in Python
+- [x] `import pytest` succeeds in Python
+- [x] `ffmpeg -version` returns version info
+- [x] `task lint` passes
 
 ---
 
@@ -92,12 +92,12 @@ FFmpeg must be available in PATH (required by yt-dlp and Whisper).
 
 ## Implementation Checklist
 
-1. [ ] Add core dependencies: `uv add yt-dlp openai-whisper rich`
-2. [ ] Add dev dependencies: `uv add --group dev pytest pytest-cov`
-3. [ ] Verify sync: `uv sync`
-4. [ ] Test all imports work
-5. [ ] Verify FFmpeg: `ffmpeg -version`
-6. [ ] Run: `task lint` — verify pass
+1. [x] Add core dependencies: `uv add yt-dlp openai-whisper rich`
+2. [x] Add dev dependencies: `uv add --group dev pytest pytest-cov`
+3. [x] Verify sync: `uv sync`
+4. [x] Test all imports work
+5. [x] Verify FFmpeg: `ffmpeg -version`
+6. [x] Run: `task lint` — verify pass
 
 ---
 
