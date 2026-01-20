@@ -136,19 +136,19 @@ print(subtitle.cps)  # 2.5
 
 ## Acceptance Criteria
 
-- [ ] File exists at `src/subsync/models.py`
-- [ ] All 11 model classes implemented as dataclasses
-- [ ] All fields have type hints
-- [ ] All models have docstrings
-- [ ] `Subtitle.char_count` returns sum of line lengths
-- [ ] `Subtitle.duration_ms` returns duration in milliseconds
-- [ ] `Subtitle.cps` returns characters per second (0 if zero duration)
-- [ ] `TranscriptionConfig()` defaults: model_name="turbo", word_timestamps=True, device="auto"
-- [ ] `ProcessingConfig()` defaults match Netflix values above
-- [ ] `OutputConfig()` defaults: format="srt", include_bom=False
-- [ ] Tests exist at `tests/test_models.py`
-- [ ] `task test` passes
-- [ ] `task lint` passes
+- [x] File exists at `src/subsync/models.py`
+- [x] All 11 model classes implemented as dataclasses
+- [x] All fields have type hints
+- [x] All models have docstrings
+- [x] `Subtitle.char_count` returns sum of line lengths
+- [x] `Subtitle.duration_ms` returns duration in milliseconds
+- [x] `Subtitle.cps` returns characters per second (0 if zero duration)
+- [x] `TranscriptionConfig()` defaults: model_name="turbo", word_timestamps=True, device="auto"
+- [x] `ProcessingConfig()` defaults match Netflix values above
+- [x] `OutputConfig()` defaults: format="srt", include_bom=False
+- [x] Tests exist at `tests/test_models.py`
+- [x] `task test` passes
+- [x] `task lint` passes
 
 ---
 
@@ -171,22 +171,22 @@ print(subtitle.cps)  # 2.5
 
 ## Implementation Checklist
 
-1. [ ] Create file: `src/subsync/models.py`
-2. [ ] Add imports: `from dataclasses import dataclass, field` and `from datetime import timedelta` and `from pathlib import Path`
-3. [ ] Define: `VideoMetadata` dataclass
-4. [ ] Define: `Word` dataclass
-5. [ ] Define: `TranscriptionSegment` dataclass (words field has default empty list)
-6. [ ] Define: `TranscriptionResult` dataclass
-7. [ ] Define: `Subtitle` dataclass with `char_count`, `duration_ms`, `cps` properties
-8. [ ] Define: `SubtitleFile` dataclass
-9. [ ] Define: `TimingValidation` dataclass
-10. [ ] Define: `ComplianceReport` dataclass
-11. [ ] Define: `TranscriptionConfig` dataclass with defaults
-12. [ ] Define: `ProcessingConfig` dataclass with Netflix defaults
-13. [ ] Define: `OutputConfig` dataclass with defaults
-14. [ ] Create tests: `tests/test_models.py`
-15. [ ] Run: `task test` — verify pass
-16. [ ] Run: `task lint` — verify pass
+1. [x] Create file: `src/subsync/models.py`
+2. [x] Add imports: `from dataclasses import dataclass, field` and `from datetime import timedelta` and `from pathlib import Path`
+3. [x] Define: `VideoMetadata` dataclass
+4. [x] Define: `Word` dataclass
+5. [x] Define: `TranscriptionSegment` dataclass (words field has default empty list)
+6. [x] Define: `TranscriptionResult` dataclass
+7. [x] Define: `Subtitle` dataclass with `char_count`, `duration_ms`, `cps` properties
+8. [x] Define: `SubtitleFile` dataclass
+9. [x] Define: `TimingValidation` dataclass
+10. [x] Define: `ComplianceReport` dataclass
+11. [x] Define: `TranscriptionConfig` dataclass with defaults
+12. [x] Define: `ProcessingConfig` dataclass with Netflix defaults
+13. [x] Define: `OutputConfig` dataclass with defaults
+14. [x] Create tests: `tests/test_models.py`
+15. [x] Run: `task test` — verify pass
+16. [x] Run: `task lint` — verify pass
 
 ---
 
