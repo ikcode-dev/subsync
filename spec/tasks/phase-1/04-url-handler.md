@@ -101,19 +101,19 @@ Error messages should be helpful for users:
 
 ## Acceptance Criteria
 
-- [ ] Function `parse_youtube_url(url: str) -> str` exists in `src/subsync/url_handler.py`
-- [ ] Standard watch URL returns correct video ID
-- [ ] Short URL (`youtu.be`) returns correct video ID
-- [ ] Embed URL returns correct video ID
-- [ ] Legacy embed URL (`/v/`) returns correct video ID
-- [ ] URLs with extra parameters still work
-- [ ] Non-YouTube URLs raise `URLParseError` with "not a YouTube URL"
-- [ ] Missing video ID raises `URLParseError` with "video ID"
-- [ ] Invalid ID format raises `URLParseError` with "11 characters"
-- [ ] Video IDs with `_` and `-` are accepted
-- [ ] Tests exist at `tests/test_url_handler.py`
-- [ ] `task test` passes
-- [ ] `task lint` passes
+- [x] Function `parse_youtube_url(url: str) -> str` exists in `src/subsync/url_handler.py`
+- [x] Standard watch URL returns correct video ID
+- [x] Short URL (`youtu.be`) returns correct video ID
+- [x] Embed URL returns correct video ID
+- [x] Legacy embed URL (`/v/`) returns correct video ID
+- [x] URLs with extra parameters still work
+- [x] Non-YouTube URLs raise `URLParseError` with "not a YouTube URL"
+- [x] Missing video ID raises `URLParseError` with "video ID"
+- [x] Invalid ID format raises `URLParseError` with "11 characters"
+- [x] Video IDs with `_` and `-` are accepted
+- [x] Tests exist at `tests/test_url_handler.py`
+- [x] `task test` passes
+- [x] `task lint` passes
 
 ---
 
@@ -144,16 +144,21 @@ Error messages should be helpful for users:
 
 ## Implementation Checklist
 
-1. [ ] Create file: `src/subsync/url_handler.py`
-2. [ ] Add imports: `from urllib.parse import urlparse, parse_qs` and `import re`
-3. [ ] Import: `from subsync.errors import URLParseError`
-4. [ ] Define: `parse_youtube_url(url: str) -> str`
-5. [ ] Implement domain validation (youtube.com, www.youtube.com, youtu.be)
-6. [ ] Implement video ID extraction for each URL pattern
-7. [ ] Implement video ID validation: regex `^[a-zA-Z0-9_-]{11}$`
-8. [ ] Create tests: `tests/test_url_handler.py`
-9. [ ] Run: `task test` — verify pass
-10. [ ] Run: `task lint` — verify pass
+1. [x] Create file: `src/subsync/url_handler.py`
+2. [x] Add imports: `from urllib.parse import urlparse, parse_qs` and `import re`
+3. [x] Import: `from subsync.errors import URLParseError`
+4. [x] Define: `parse_youtube_url(url: str) -> str`
+5. [x] Implement domain validation (youtube.com, www.youtube.com, youtu.be)
+6. [x] Implement video ID extraction for each URL pattern
+7. [x] Implement video ID validation: regex `^[a-zA-Z0-9_-]{11}$`
+8. [x] Create tests: `tests/test_url_handler.py`
+9. [x] Run: `task test` — verify pass
+10. [x] Run: `task lint` — verify pass
+
+## Verification
+
+- Test run: `uv run pytest` — 38 passed, 0 failed.
+- Lint: `uv run ruff check .` — All checks passed.
 
 ---
 
