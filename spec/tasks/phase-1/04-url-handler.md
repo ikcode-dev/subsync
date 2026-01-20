@@ -2,15 +2,63 @@
 
 ## Objective
 
-Create a YouTube URL parser that extracts video IDs from various URL formats and validates them.
+Create a YouTube URL parser that extracts and validates video IDs from various URL formats.
+
+## Detail Level
+
+EXPANDED
 
 ---
 
 ## Context
 
+### References
+
 - **Plan**: [phase-1-foundation.md](../../plan/phase-1-foundation.md) → Section "Components → 4. URL Handler"
 - **Context**: [youtube-compatibility.md](../../context/youtube-compatibility.md)
-- **Depends on**: [Task 2](./02-error-definitions.md), [Task 3](./03-data-models.md)
+
+### Dependencies
+
+- **Task 2**: Uses `URLParseError` from `subsync.errors`
+- **Task 3**: *(Sequencing only — URL handler doesn't use models)*
+
+### Context Summary
+
+#### YouTube Video ID Format
+
+YouTube video IDs have been consistent since 2009:
+
+| Property | Value | Rationale |
+|----------|-------|-----------|
+| Length | Exactly 11 characters | Base64-like encoding provides ~73 quintillion unique IDs |
+| Characters | `[a-zA-Z0-9_-]` | URL-safe base64 alphabet |
+| Case | Sensitive | `dQw4w9WgXcQ` ≠ `DQW4W9WGXCQ` |
+
+#### Supported URL Patterns
+
+YouTube URLs come in several formats that all need to be handled:
+
+| Pattern | Format | Video ID Location |
+|---------|--------|-------------------|
+| Standard watch | `https://www.youtube.com/watch?v=VIDEO_ID` | Query parameter `v` |
+| Short link | `https://youtu.be/VIDEO_ID` | Path segment |
+| Embed | `https://www.youtube.com/embed/VIDEO_ID` | Path segment after `/embed/` |
+| Legacy embed | `https://www.youtube.com/v/VIDEO_ID` | Path segment after `/v/` |
+
+**Domain variations**: All patterns work with or without `www.`, and with `http://` or `https://`.
+
+**Extra parameters**: URLs may include `&t=123` (timestamp), `&list=PLxyz` (playlist), etc. — these should be ignored.
+
+#### Invalid URLs to Reject
+
+| URL Type | Example | Why Invalid |
+|----------|---------|-------------|
+| Non-YouTube domain | `https://vimeo.com/12345` | Wrong platform |
+| Channel URL | `https://www.youtube.com/c/ChannelName` | No video ID |
+| Playlist-only | `https://www.youtube.com/playlist?list=PLxyz` | No video ID |
+| Missing ID | `https://www.youtube.com/watch` | No `v` parameter |
+| Invalid ID chars | `watch?v=abc!def@123` | Contains `!` and `@` |
+| Wrong ID length | `watch?v=short` or `watch?v=wayTooLong123` | Not 11 chars |
 
 ---
 
@@ -18,48 +66,54 @@ Create a YouTube URL parser that extracts video IDs from various URL formats and
 
 ### Functional Requirements
 
-The URL handler must:
 - Accept a YouTube URL string as input
-- Return the 11-character video ID
-- Raise `URLParseError` for invalid or unsupported URLs
+- Return the 11-character video ID as a string
+- Raise `URLParseError` for any invalid or unsupported URL
 
-### Supported URL Patterns
+### Interface Contract
 
-| Pattern | Example |
-|---------|---------|
-| Standard watch URL | `https://www.youtube.com/watch?v=dQw4w9WgXcQ` |
-| Short URL | `https://youtu.be/dQw4w9WgXcQ` |
-| Embed URL | `https://www.youtube.com/embed/dQw4w9WgXcQ` |
-| Old embed URL | `https://www.youtube.com/v/dQw4w9WgXcQ` |
-| With extra params | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42&list=PLxyz` |
-| Without www | `https://youtube.com/watch?v=dQw4w9WgXcQ` |
-| HTTP (not just HTTPS) | `http://www.youtube.com/watch?v=dQw4w9WgXcQ` |
+```python
+def parse_youtube_url(url: str) -> str:
+    """Extract video ID from YouTube URL.
 
-### Video ID Validation
+    Args:
+        url: A YouTube video URL in any supported format.
 
-- Exactly 11 characters
-- Contains only `[a-zA-Z0-9_-]`
-- Case-sensitive
+    Returns:
+        The 11-character video ID.
 
-### Error Handling
+    Raises:
+        URLParseError: If URL is invalid, not YouTube, or missing video ID.
+    """
+```
 
-Raise `URLParseError` with descriptive message when:
-- URL is not from YouTube domain
-- URL doesn't contain a video ID
-- Video ID format is invalid
+### Error Messages
+
+Error messages should be helpful for users:
+
+| Condition | Message Should Contain |
+|-----------|------------------------|
+| Non-YouTube domain | "not a YouTube URL" |
+| Missing video ID | "video ID" |
+| Invalid ID format | "11 characters" |
 
 ---
 
 ## Acceptance Criteria
 
 - [ ] Function `parse_youtube_url(url: str) -> str` exists in `src/subsync/url_handler.py`
-- [ ] All supported URL patterns return correct video ID
-- [ ] Non-YouTube URLs raise `URLParseError` with message containing "not a YouTube URL"
-- [ ] Missing video ID raises `URLParseError` with message containing "video ID"
-- [ ] Invalid video ID format raises `URLParseError` with message containing "11 characters"
-- [ ] Video IDs with underscore and hyphen characters are accepted
-- [ ] All unit tests pass
-- [ ] Linting passes
+- [ ] Standard watch URL returns correct video ID
+- [ ] Short URL (`youtu.be`) returns correct video ID
+- [ ] Embed URL returns correct video ID
+- [ ] Legacy embed URL (`/v/`) returns correct video ID
+- [ ] URLs with extra parameters still work
+- [ ] Non-YouTube URLs raise `URLParseError` with "not a YouTube URL"
+- [ ] Missing video ID raises `URLParseError` with "video ID"
+- [ ] Invalid ID format raises `URLParseError` with "11 characters"
+- [ ] Video IDs with `_` and `-` are accepted
+- [ ] Tests exist at `tests/test_url_handler.py`
+- [ ] `task test` passes
+- [ ] `task lint` passes
 
 ---
 
@@ -70,26 +124,45 @@ Raise `URLParseError` with descriptive message when:
 | Standard URL | `https://www.youtube.com/watch?v=dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
 | Short URL | `https://youtu.be/dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
 | Embed URL | `https://www.youtube.com/embed/dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
-| URL with timestamp | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42` | Returns `dQw4w9WgXcQ` |
-| URL with playlist | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLxyz` | Returns `dQw4w9WgXcQ` |
-| ID with special chars | `https://www.youtube.com/watch?v=abc_def-123` | Returns `abc_def-123` |
-| Non-YouTube URL | `https://vimeo.com/12345` | Raises `URLParseError` |
-| Missing video ID | `https://www.youtube.com/watch` | Raises `URLParseError` |
-| Short video ID | `https://www.youtube.com/watch?v=short` | Raises `URLParseError` |
-| Long video ID | `https://www.youtube.com/watch?v=wayTooLongVideoId` | Raises `URLParseError` |
+| Legacy embed | `https://www.youtube.com/v/dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
+| Without www | `https://youtube.com/watch?v=dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
+| HTTP (not HTTPS) | `http://www.youtube.com/watch?v=dQw4w9WgXcQ` | Returns `dQw4w9WgXcQ` |
+| With timestamp | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42` | Returns `dQw4w9WgXcQ` |
+| With playlist | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLxyz` | Returns `dQw4w9WgXcQ` |
+| ID with underscore | `https://www.youtube.com/watch?v=abc_def_123` | Returns `abc_def_123` |
+| ID with hyphen | `https://www.youtube.com/watch?v=abc-def-123` | Returns `abc-def-123` |
+| Non-YouTube URL | `https://vimeo.com/12345` | Raises `URLParseError` ("not a YouTube URL") |
+| Missing video ID | `https://www.youtube.com/watch` | Raises `URLParseError` ("video ID") |
+| Short video ID | `https://www.youtube.com/watch?v=short` | Raises `URLParseError` ("11 characters") |
+| Long video ID | `https://www.youtube.com/watch?v=wayTooLongVideoId` | Raises `URLParseError` ("11 characters") |
 | Invalid chars in ID | `https://www.youtube.com/watch?v=abc!def@123` | Raises `URLParseError` |
 | Empty URL | `` | Raises `URLParseError` |
 | Channel URL | `https://www.youtube.com/c/SomeChannel` | Raises `URLParseError` |
-| Playlist URL (no video) | `https://www.youtube.com/playlist?list=PLxyz` | Raises `URLParseError` |
+| Playlist-only URL | `https://www.youtube.com/playlist?list=PLxyz` | Raises `URLParseError` |
+
+---
+
+## Implementation Checklist
+
+1. [ ] Create file: `src/subsync/url_handler.py`
+2. [ ] Add imports: `from urllib.parse import urlparse, parse_qs` and `import re`
+3. [ ] Import: `from subsync.errors import URLParseError`
+4. [ ] Define: `parse_youtube_url(url: str) -> str`
+5. [ ] Implement domain validation (youtube.com, www.youtube.com, youtu.be)
+6. [ ] Implement video ID extraction for each URL pattern
+7. [ ] Implement video ID validation: regex `^[a-zA-Z0-9_-]{11}$`
+8. [ ] Create tests: `tests/test_url_handler.py`
+9. [ ] Run: `task test` — verify pass
+10. [ ] Run: `task lint` — verify pass
 
 ---
 
 ## Definition of Done
 
 - `src/subsync/url_handler.py` exists with `parse_youtube_url` function
-- All supported URL formats parse correctly
+- All URL patterns parse correctly
 - Invalid URLs raise `URLParseError` with helpful messages
-- Tests exist in `tests/test_url_handler.py`
+- Tests cover all scenarios above
 - All tests pass
 - Linting passes
 
@@ -97,12 +170,14 @@ Raise `URLParseError` with descriptive message when:
 
 ## Notes
 
-- Use standard library for URL parsing (`urllib.parse`)
-- Video ID regex pattern: `^[a-zA-Z0-9_-]{11}$`
+- Use `urllib.parse` from standard library (no external dependencies)
+- Video ID regex: `^[a-zA-Z0-9_-]{11}$`
 - Supported domains: `youtube.com`, `www.youtube.com`, `youtu.be`
+- `youtu.be` URLs have video ID as first path segment
+- `/embed/` and `/v/` URLs have video ID as second path segment
 
 ---
 
 ## Next Task
 
-After verification, proceed to → [05-final-verification.md](./05-final-verification.md)
+→ [05-final-verification.md](./05-final-verification.md)

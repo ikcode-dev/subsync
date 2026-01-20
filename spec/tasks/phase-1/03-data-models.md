@@ -1,253 +1,215 @@
 # Task 3: Implement Data Models
 
-## Overview
+## Objective
 
-Implement all core data models as Python dataclasses. These models define the data structures flowing between modules throughout the pipeline.
+Create all data models as Python dataclasses that define the data structures flowing between SubSync modules.
 
-**Plan Reference**: [phase-1-foundation.md](../../plan/phase-1-foundation.md) → Section "Components → 2. Data Models"
+## Detail Level
 
-**Context Reference**: [data-models.md](../../context/data-models.md)
-
-**Depends On**: [Task 2](./02-error-definitions.md)
+EXPANDED
 
 ---
 
-## Objective
+## Context
 
-Create `src/subsync/models.py` with all data classes defined in the context, including computed properties for validation and compliance checking.
+### References
+
+- **Plan**: [phase-1-foundation.md](../../plan/phase-1-foundation.md) → Section "Components → 3. Data Models"
+- **Context**: [data-models.md](../../context/data-models.md)
+
+### Dependencies
+
+- **Task 2**: *(Sequencing only — no imports needed)*
+
+### Context Summary
+
+SubSync uses dataclasses to define contracts between pipeline stages:
+
+```
+URL Handler → VideoMetadata
+Transcriber → TranscriptionResult (containing TranscriptionSegment, Word)
+Processor → Subtitle, SubtitleFile, ComplianceReport
+```
+
+**Why Dataclasses (not Pydantic)**:
+- Zero additional dependencies
+- Sufficient for current validation needs
+- Standard library familiarity
+- Can migrate to Pydantic later if advanced validation needed
+
+#### Model Categories
+
+**Core Domain Models** (data flowing through pipeline):
+
+| Model | Fields | Purpose |
+|-------|--------|---------|
+| `VideoMetadata` | id, title, duration, uploader, upload_date | YouTube video info |
+| `Word` | word, start, end | Single word with timing |
+| `TranscriptionSegment` | id, start, end, text, words | Speech segment |
+| `TranscriptionResult` | language, duration, segments | Whisper output |
+| `Subtitle` | index, start_time, end_time, text, lines | SRT/VTT event |
+| `SubtitleFile` | format, language, video_id, subtitles | Complete file |
+
+**Validation Models** (compliance checking):
+
+| Model | Fields | Purpose |
+|-------|--------|---------|
+| `TimingValidation` | is_valid, duration_ok, gap_ok, issues | Single subtitle check |
+| `ComplianceReport` | total_subtitles, timing_issues, cps_warnings, ... | File-level report |
+
+**Configuration Models** (settings with defaults):
+
+| Model | Key Defaults | Purpose |
+|-------|--------------|---------|
+| `TranscriptionConfig` | model="turbo", word_timestamps=True | Whisper settings |
+| `ProcessingConfig` | max_chars=42, max_lines=2, min_duration=833ms | Netflix rules |
+| `OutputConfig` | format="srt", include_bom=False | Output settings |
+
+#### Subtitle Computed Properties
+
+The `Subtitle` class needs computed properties for compliance checking:
+
+| Property | Calculation | Why Needed |
+|----------|-------------|------------|
+| `char_count` | Sum of characters across all lines | CPS calculation |
+| `duration_ms` | (end_time - start_time) in milliseconds | Duration validation |
+| `cps` | char_count / (duration_ms / 1000) | Netflix CPS check |
+
+#### Netflix Compliance Values (from ProcessingConfig defaults)
+
+| Setting | Default | Netflix Rule |
+|---------|---------|--------------|
+| `max_chars_per_line` | 42 | Maximum characters per line |
+| `max_lines` | 2 | Maximum lines per subtitle |
+| `min_duration_ms` | 833 | Minimum 5/6 second display |
+| `max_duration_ms` | 7000 | Maximum 7 second display |
+| `min_gap_ms` | 83 | Minimum 2 frames gap |
+| `max_cps_adult` | 20.0 | Adult reading speed |
+| `max_cps_children` | 17.0 | Children reading speed |
 
 ---
 
 ## Requirements
 
-### Core Models to Implement
+### Functional Requirements
 
-| Model | Purpose |
-|-------|---------|
-| `VideoMetadata` | YouTube video information |
-| `Word` | Individual word with timing |
-| `TranscriptionSegment` | Segment of transcribed speech |
-| `TranscriptionResult` | Complete transcription output |
-| `Subtitle` | Single subtitle event with computed properties |
-| `SubtitleFile` | Container for subtitle file |
+- All models are Python `@dataclass` classes
+- All fields have type hints
+- All models have docstrings
+- `Subtitle` has `char_count`, `duration_ms`, `cps` properties
+- Configuration models have defaults matching Netflix requirements
+- Optional fields use `| None` syntax
 
-### Validation Models
-
-| Model | Purpose |
-|-------|---------|
-| `TimingValidation` | Result of timing validation |
-| `ComplianceReport` | Aggregate compliance status |
-
-### Configuration Models
-
-| Model | Purpose |
-|-------|---------|
-| `TranscriptionConfig` | Transcription settings |
-| `ProcessingConfig` | Subtitle processing settings |
-| `OutputConfig` | Output generation settings |
-
----
-
-## Implementation
-
-### File: `src/subsync/models.py`
-
-Implement all models from [data-models.md](../../context/data-models.md).
-
-Key implementation notes:
-
-1. **Use standard library only**: `dataclasses`, `datetime`, `pathlib`
-2. **Type hints on all fields**: Use `list[X]` not `List[X]` (Python 3.10+)
-3. **Computed properties**: `Subtitle` has `char_count`, `duration_ms`, `cps` properties
-4. **Default values**: Configuration models have sensible defaults
-5. **Optional fields**: Use `| None` syntax for optional fields
-
-### Key Computed Properties (Subtitle class)
+### Interface Contract
 
 ```python
-@property
-def char_count(self) -> int:
-    """Total characters across all lines."""
-    return sum(len(line) for line in self.lines)
+# Core models require all fields:
+meta = VideoMetadata(id="...", title="...", duration=180.0, uploader="...", upload_date="...")
 
-@property
-def duration_ms(self) -> int:
-    """Duration in milliseconds."""
-    return int((self.end_time - self.start_time).total_seconds() * 1000)
+# Config models have defaults:
+config = TranscriptionConfig()  # All defaults applied
+config = ProcessingConfig(max_chars_per_line=50)  # Override one default
 
-@property
-def cps(self) -> float:
-    """Characters per second."""
-    duration_secs = self.duration_ms / 1000
-    return self.char_count / duration_secs if duration_secs > 0 else 0
+# Subtitle computed properties:
+subtitle = Subtitle(index=1, start_time=timedelta(0), end_time=timedelta(seconds=2),
+                    text="Hello", lines=["Hello"])
+print(subtitle.cps)  # 2.5
 ```
+
+### Models to Implement
+
+| # | Model | Required Fields |
+|---|-------|-----------------|
+| 1 | `VideoMetadata` | id, title, duration, uploader, upload_date |
+| 2 | `Word` | word, start, end |
+| 3 | `TranscriptionSegment` | id, start, end, text, words |
+| 4 | `TranscriptionResult` | language, duration, segments |
+| 5 | `Subtitle` | index, start_time, end_time, text, lines + properties |
+| 6 | `SubtitleFile` | format, language, video_id, subtitles |
+| 7 | `TimingValidation` | is_valid, duration_ok, gap_ok, issues |
+| 8 | `ComplianceReport` | total_subtitles, timing_issues, cps_warnings, line_length_issues, is_compliant, warnings, errors |
+| 9 | `TranscriptionConfig` | model_name, language, word_timestamps, device |
+| 10 | `ProcessingConfig` | max_chars_per_line, max_lines, min_duration_ms, max_duration_ms, min_gap_ms, max_cps_adult, max_cps_children, is_children_content |
+| 11 | `OutputConfig` | format, output_path, include_bom |
 
 ---
 
-## Tests to Implement
+## Acceptance Criteria
 
-### File: `tests/test_models.py`
-
-```python
-"""Tests for data models."""
-
-from datetime import timedelta
-
-import pytest
-
-from subsync.models import (
-    VideoMetadata,
-    Word,
-    TranscriptionSegment,
-    TranscriptionResult,
-    Subtitle,
-    SubtitleFile,
-    TimingValidation,
-    ComplianceReport,
-    TranscriptionConfig,
-    ProcessingConfig,
-    OutputConfig,
-)
-
-
-class TestVideoMetadata:
-    def test_create_video_metadata(self):
-        meta = VideoMetadata(
-            id="dQw4w9WgXcQ",
-            title="Test Video",
-            duration=180.0,
-            uploader="Test Channel",
-            upload_date="20240115",
-        )
-        assert meta.id == "dQw4w9WgXcQ"
-        assert meta.duration == 180.0
-
-
-class TestWord:
-    def test_create_word(self):
-        word = Word(word="hello", start=0.0, end=0.5)
-        assert word.word == "hello"
-        assert word.start == 0.0
-        assert word.end == 0.5
-
-
-class TestSubtitle:
-    def test_char_count_single_line(self):
-        subtitle = Subtitle(
-            index=1,
-            start_time=timedelta(seconds=0),
-            end_time=timedelta(seconds=2),
-            text="Hello world",
-            lines=["Hello world"],
-        )
-        assert subtitle.char_count == 11
-
-    def test_char_count_multiple_lines(self):
-        subtitle = Subtitle(
-            index=1,
-            start_time=timedelta(seconds=0),
-            end_time=timedelta(seconds=2),
-            text="Hello world, how are you?",
-            lines=["Hello world,", "how are you?"],
-        )
-        assert subtitle.char_count == 24  # 12 + 12
-
-    def test_duration_ms(self):
-        subtitle = Subtitle(
-            index=1,
-            start_time=timedelta(seconds=1),
-            end_time=timedelta(seconds=3, milliseconds=500),
-            text="Test",
-            lines=["Test"],
-        )
-        assert subtitle.duration_ms == 2500
-
-    def test_cps_calculation(self):
-        subtitle = Subtitle(
-            index=1,
-            start_time=timedelta(seconds=0),
-            end_time=timedelta(seconds=2),
-            text="Hello world",
-            lines=["Hello world"],  # 11 chars
-        )
-        # 11 chars / 2 seconds = 5.5 cps
-        assert subtitle.cps == 5.5
-
-    def test_cps_zero_duration(self):
-        subtitle = Subtitle(
-            index=1,
-            start_time=timedelta(seconds=1),
-            end_time=timedelta(seconds=1),  # Same time = 0 duration
-            text="Test",
-            lines=["Test"],
-        )
-        assert subtitle.cps == 0  # Avoid division by zero
-
-
-class TestConfigDefaults:
-    def test_transcription_config_defaults(self):
-        config = TranscriptionConfig()
-        assert config.model_name == "turbo"
-        assert config.language is None
-        assert config.word_timestamps is True
-        assert config.device == "auto"
-
-    def test_processing_config_defaults(self):
-        config = ProcessingConfig()
-        assert config.max_chars_per_line == 42
-        assert config.max_lines == 2
-        assert config.min_duration_ms == 833
-        assert config.max_duration_ms == 7000
-        assert config.min_gap_ms == 83
-        assert config.max_cps_adult == 20.0
-        assert config.max_cps_children == 17.0
-        assert config.is_children_content is False
-
-    def test_output_config_defaults(self):
-        config = OutputConfig()
-        assert config.format == "srt"
-        assert config.output_path is None
-        assert config.include_bom is False
-```
+- [ ] File exists at `src/subsync/models.py`
+- [ ] All 11 model classes implemented as dataclasses
+- [ ] All fields have type hints
+- [ ] All models have docstrings
+- [ ] `Subtitle.char_count` returns sum of line lengths
+- [ ] `Subtitle.duration_ms` returns duration in milliseconds
+- [ ] `Subtitle.cps` returns characters per second (0 if zero duration)
+- [ ] `TranscriptionConfig()` defaults: model_name="turbo", word_timestamps=True, device="auto"
+- [ ] `ProcessingConfig()` defaults match Netflix values above
+- [ ] `OutputConfig()` defaults: format="srt", include_bom=False
+- [ ] Tests exist at `tests/test_models.py`
+- [ ] `task test` passes
+- [ ] `task lint` passes
 
 ---
 
-## Verification Checklist
+## Test Scenarios
 
-- [x] File created at `src/subsync/models.py`
-- [x] All 11 model classes implemented
-- [x] All type hints present
-- [x] All docstrings present
-- [x] `Subtitle` computed properties work correctly
-- [x] Configuration defaults match spec
-- [x] Tests created at `tests/test_models.py`
-- [x] `task test` passes
-- [x] `task lint` passes
+| Scenario | Input | Expected Outcome |
+|----------|-------|------------------|
+| Create VideoMetadata | All fields provided | Instance with correct values |
+| Create Word | word="hello", start=0.0, end=0.5 | Instance with correct values |
+| Subtitle char_count (single line) | lines=["Hello world"] | Returns 11 |
+| Subtitle char_count (two lines) | lines=["Hello world,", "how are you?"] | Returns 24 |
+| Subtitle duration_ms | start=1s, end=3.5s | Returns 2500 |
+| Subtitle cps | 11 chars, 2s duration | Returns 5.5 |
+| Subtitle cps (zero duration) | start=end=1s | Returns 0 (no division error) |
+| TranscriptionConfig defaults | `TranscriptionConfig()` | model_name="turbo", language=None, word_timestamps=True, device="auto" |
+| ProcessingConfig defaults | `ProcessingConfig()` | max_chars=42, max_lines=2, min_duration=833, etc. |
+| OutputConfig defaults | `OutputConfig()` | format="srt", output_path=None, include_bom=False |
 
-### Quick Import Test
+---
 
-```bash
-uv run python -c "from subsync.models import VideoMetadata, Word, TranscriptionSegment, Subtitle; print('All models imported')"
-```
+## Implementation Checklist
+
+1. [ ] Create file: `src/subsync/models.py`
+2. [ ] Add imports: `from dataclasses import dataclass, field` and `from datetime import timedelta` and `from pathlib import Path`
+3. [ ] Define: `VideoMetadata` dataclass
+4. [ ] Define: `Word` dataclass
+5. [ ] Define: `TranscriptionSegment` dataclass (words field has default empty list)
+6. [ ] Define: `TranscriptionResult` dataclass
+7. [ ] Define: `Subtitle` dataclass with `char_count`, `duration_ms`, `cps` properties
+8. [ ] Define: `SubtitleFile` dataclass
+9. [ ] Define: `TimingValidation` dataclass
+10. [ ] Define: `ComplianceReport` dataclass
+11. [ ] Define: `TranscriptionConfig` dataclass with defaults
+12. [ ] Define: `ProcessingConfig` dataclass with Netflix defaults
+13. [ ] Define: `OutputConfig` dataclass with defaults
+14. [ ] Create tests: `tests/test_models.py`
+15. [ ] Run: `task test` — verify pass
+16. [ ] Run: `task lint` — verify pass
 
 ---
 
 ## Definition of Done
 
-- `src/subsync/models.py` exists with all 11 model classes
-- All models have type hints and docstrings
-- Computed properties on `Subtitle` work correctly
-- Unit tests pass
+- `src/subsync/models.py` exists with all 11 dataclasses
+- All type hints and docstrings present
+- Computed properties work correctly
+- Configuration defaults match spec
+- Tests pass
 - Linting passes
+
+---
+
+## Notes
+
+- Use `field(default_factory=lambda: [])` for list defaults (Pyright compatibility)
+- Use `timedelta` from `datetime` for time fields in `Subtitle`
+- Use `Path | None` for optional path fields
+- Properties don't need `@dataclass` — they're regular Python properties
 
 ---
 
 ## Next Task
 
-After verification, proceed to → [04-url-handler.md](./04-url-handler.md)
-
----
-
-## User Verification Required
-
-**STOP** after completing this task. Present the changes to the user and wait for verification before proceeding to the next task.
+→ [04-url-handler.md](./04-url-handler.md)

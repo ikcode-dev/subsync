@@ -1,26 +1,49 @@
 # Task 1: Install Dependencies
 
-## Overview
-
-Install all required project dependencies and verify they work correctly. This is the foundational task that enables all subsequent development.
-
-**Plan Reference**: [phase-1-foundation.md](../../plan/phase-1-foundation.md) → Section "Components → 1. Dependencies Setup"
-
-**Context Reference**: [dependencies.md](../../context/dependencies.md)
-
----
-
 ## Objective
 
 Set up the development environment with all required dependencies for SubSync.
+
+## Detail Level
+
+EXPANDED
+
+---
+
+## Context
+
+### References
+
+- **Plan**: [phase-1-foundation.md](../../plan/phase-1-foundation.md) → Section "Components → 1. Dependencies"
+- **Context**: [dependencies.md](../../context/dependencies.md)
+
+### Dependencies
+
+- *(None — this is the first task)*
+
+### Context Summary
+
+SubSync requires three core Python packages and one system dependency:
+
+| Package | Purpose | Why This Package |
+|---------|---------|------------------|
+| `yt-dlp` | YouTube metadata & audio download | Most maintained youtube-dl fork, handles YouTube changes, public domain license |
+| `openai-whisper` | Speech-to-text transcription | State-of-the-art accuracy, word-level timestamps, MIT license |
+| `rich` | CLI formatting & progress | Beautiful terminal output, widely adopted |
+| `FFmpeg` (system) | Audio processing | Required by both yt-dlp and Whisper for audio extraction/conversion |
+
+**Whisper Model Note**: Default model is "turbo" (~800MB). Models download on first use, not during installation.
+
+**FFmpeg Rationale**:
+- yt-dlp uses FFmpeg to extract audio from video containers
+- Whisper uses FFmpeg to load/process audio files
+- Cannot be installed via pip — must be system-installed
 
 ---
 
 ## Requirements
 
 ### Core Dependencies
-
-Install the following production dependencies:
 
 | Package | Purpose |
 |---------|---------|
@@ -30,8 +53,6 @@ Install the following production dependencies:
 
 ### Development Dependencies
 
-Install the following dev dependencies:
-
 | Package | Purpose |
 |---------|---------|
 | `pytest` | Test framework |
@@ -39,72 +60,65 @@ Install the following dev dependencies:
 
 ### System Requirements
 
-Verify FFmpeg is available in PATH (required by yt-dlp for audio extraction).
+FFmpeg must be available in PATH (required by yt-dlp and Whisper).
 
 ---
 
-## Implementation Steps
+## Acceptance Criteria
 
-1. **Add core dependencies**:
-   ```bash
-   uv add yt-dlp openai-whisper rich
-   ```
-
-2. **Add dev dependencies**:
-   ```bash
-   uv add --group dev pytest pytest-cov
-   ```
-
-3. **Verify FFmpeg availability**:
-   ```bash
-   ffmpeg -version
-   ```
-
-4. **Verify Python imports work**:
-   ```python
-   import yt_dlp
-   import whisper
-   import rich
-   ```
+- [ ] All dependencies listed in `pyproject.toml`
+- [ ] `uv sync` completes without errors
+- [ ] `import yt_dlp` succeeds in Python
+- [ ] `import whisper` succeeds in Python
+- [ ] `import rich` succeeds in Python
+- [ ] `import pytest` succeeds in Python
+- [ ] `ffmpeg -version` returns version info
+- [ ] `task lint` passes
 
 ---
 
-## Verification Checklist
+## Test Scenarios
 
-- [x] `uv sync` completes without errors
-- [x] `uv run python -c "import yt_dlp"` succeeds
-- [x] `uv run python -c "import whisper"` succeeds
-- [x] `uv run python -c "import rich"` succeeds
-- [x] `uv run python -c "import pytest"` succeeds
-- [x] `ffmpeg -version` returns version info (not "command not found")
-- [x] `task lint` passes
+| Scenario | Command | Expected Outcome |
+|----------|---------|------------------|
+| Sync dependencies | `uv sync` | Completes without errors |
+| Import yt-dlp | `uv run python -c "import yt_dlp"` | No error |
+| Import whisper | `uv run python -c "import whisper"` | No error |
+| Import rich | `uv run python -c "import rich"` | No error |
+| Import pytest | `uv run python -c "import pytest"` | No error |
+| FFmpeg available | `ffmpeg -version` | Shows version, not "command not found" |
+
+---
+
+## Implementation Checklist
+
+1. [ ] Add core dependencies: `uv add yt-dlp openai-whisper rich`
+2. [ ] Add dev dependencies: `uv add --group dev pytest pytest-cov`
+3. [ ] Verify sync: `uv sync`
+4. [ ] Test all imports work
+5. [ ] Verify FFmpeg: `ffmpeg -version`
+6. [ ] Run: `task lint` — verify pass
 
 ---
 
 ## Definition of Done
 
-- All dependencies are listed in `pyproject.toml`
-- All dependencies install successfully via `uv sync`
-- All imports work from Python
-- FFmpeg is confirmed available
-- No linting errors
+- All dependencies in `pyproject.toml`
+- All dependencies install via `uv sync`
+- All Python imports work
+- FFmpeg confirmed available
+- Linting passes
 
 ---
 
 ## Notes
 
-- Whisper will download model files on first use (~1.5GB for turbo model)
-- If FFmpeg is not installed, instruct user to install via: `brew install ffmpeg` (macOS)
-- GPU support is optional; Whisper will auto-detect and use CPU if CUDA unavailable
+- If FFmpeg missing, install via: `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux)
+- Whisper downloads model files on first use (~1.5GB for turbo model)
+- GPU support is optional; Whisper auto-detects and falls back to CPU
 
 ---
 
 ## Next Task
 
-After verification, proceed to → [02-error-definitions.md](./02-error-definitions.md)
-
----
-
-## User Verification Required
-
-**STOP** after completing this task. Present the changes to the user and wait for verification before proceeding to the next task.
+→ [02-error-definitions.md](./02-error-definitions.md)
