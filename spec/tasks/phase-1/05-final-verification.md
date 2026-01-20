@@ -48,17 +48,17 @@ This task has **no implementation work**. It verifies that all previous tasks ar
 
 ## Acceptance Criteria
 
-- [ ] All dependency imports succeed (yt_dlp, whisper, rich, pytest)
-- [ ] FFmpeg is available in PATH
-- [ ] All error classes importable from `subsync.errors`
-- [ ] All model classes importable from `subsync.models`
-- [ ] `Subtitle` computed properties work correctly
-- [ ] Configuration models have correct defaults
-- [ ] `parse_youtube_url` importable from `subsync.url_handler`
-- [ ] URL handler parses all supported formats
-- [ ] URL handler rejects invalid URLs with correct errors
-- [ ] `task test` passes with no failures
-- [ ] `task lint` passes with no errors
+- [x] All dependency imports succeed (yt_dlp, whisper, rich, pytest)
+- [x] FFmpeg is available in PATH
+- [x] All error classes importable from `subsync.errors`
+- [x] All model classes importable from `subsync.models`
+- [x] `Subtitle` computed properties work correctly
+- [x] Configuration models have correct defaults
+- [x] `parse_youtube_url` importable from `subsync.url_handler`
+- [x] URL handler parses all supported formats
+- [x] URL handler rejects invalid URLs with correct errors
+- [x] `task test` passes with no failures
+- [x] `task lint` passes with no errors
 
 ---
 
@@ -226,14 +226,14 @@ tests/
 
 ## Implementation Checklist
 
-1. [ ] Run all dependency import checks
-2. [ ] Run error module import check
-3. [ ] Run models module import check
-4. [ ] Run subtitle properties check
-5. [ ] Run config defaults check
-6. [ ] Run URL handler check
-7. [ ] Run: `task test` — all tests pass
-8. [ ] Run: `task lint` — no errors
+1. [x] Run all dependency import checks
+2. [x] Run error module import check
+3. [x] Run models module import check
+4. [x] Run subtitle properties check
+5. [x] Run config defaults check
+6. [x] Run URL handler check
+7. [x] Run: `task test` — all tests pass
+8. [x] Run: `task lint` — no errors
 
 ---
 
