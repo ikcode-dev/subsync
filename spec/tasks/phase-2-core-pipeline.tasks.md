@@ -12,16 +12,16 @@
 
 From [the plan](../plan/phase-2-core-pipeline.md):
 
-- [ ] Can extract metadata from public YouTube videos
-- [ ] Can download and extract audio to WAV format
-- [ ] Can transcribe audio with Whisper
-- [ ] Word timestamps are included when available
-- [ ] Language auto-detection works
-- [ ] GPU used when available, CPU fallback works
-- [ ] Temporary files are cleaned up automatically
-- [ ] Progress is reported during long operations
-- [ ] All unit tests pass
-- [ ] Error cases produce clear, actionable messages
+- [x] Can extract metadata from public YouTube videos
+- [x] Can download and extract audio to WAV format
+- [x] Can transcribe audio with Whisper
+- [x] Word timestamps are included when available
+- [x] Language auto-detection works
+- [x] GPU used when available, CPU fallback works
+- [x] Temporary files are cleaned up automatically
+- [x] Progress is reported during long operations
+- [x] All unit tests pass
+- [x] Error cases produce clear, actionable messages
 
 ---
 
@@ -46,10 +46,10 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `uv run python -c "import yt_dlp; print(yt_dlp.version.__version__)"` prints a version
-- [ ] `uv run python -c "import whisper; print(whisper.__version__)"` prints a version
-- [ ] `pyproject.toml` lists both new dependencies
-- [ ] `uv run pytest` passes (no regressions)
+- [x] `uv run python -c "import yt_dlp; print(yt_dlp.version.__version__)"` prints a version
+- [x] `uv run python -c "import whisper; print(whisper.__version__)"` prints a version
+- [x] `pyproject.toml` lists both new dependencies
+- [x] `uv run pytest` passes (no regressions)
 
 ### Test Scenarios
 
@@ -61,10 +61,10 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. `uv add yt-dlp`
-2. `uv add openai-whisper`
-3. Verify imports
-4. Run full test suite
+1. [x] `uv add yt-dlp`
+2. [x] `uv add openai-whisper`
+3. [x] Verify imports
+4. [x] Run full test suite
 
 ---
 
@@ -110,14 +110,14 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `get_video_metadata` accepts a video ID string and returns `VideoMetadata`
-- [ ] All `VideoMetadata` fields are populated from yt-dlp response
-- [ ] Unavailable video raises `VideoUnavailableError`
-- [ ] Age-restricted video raises `AgeRestrictedError`
-- [ ] Live stream raises `LiveStreamError`
-- [ ] yt-dlp console output is suppressed
-- [ ] Unit tests cover success and all error cases (mocked yt-dlp)
-- [ ] Type hints on all function signatures
+- [x] `get_video_metadata` accepts a video ID string and returns `VideoMetadata`
+- [x] All `VideoMetadata` fields are populated from yt-dlp response
+- [x] Unavailable video raises `VideoUnavailableError`
+- [x] Age-restricted video raises `AgeRestrictedError`
+- [x] Live stream raises `LiveStreamError`
+- [x] yt-dlp console output is suppressed
+- [x] Unit tests cover success and all error cases (mocked yt-dlp)
+- [x] Type hints on all function signatures
 
 ### Test Scenarios
 
@@ -133,15 +133,15 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Create `src/subsync/audio_extractor.py` with module docstring
-2. Implement `get_video_metadata()` with yt-dlp `YoutubeDL` context manager
-3. Configure yt-dlp options: `quiet=True`, `no_warnings=True`, `extract_flat=False`
-4. Map info dict fields to `VideoMetadata`
-5. Add error mapping logic (parse yt-dlp error messages for classification)
-6. Add live stream detection (`is_live` field in info dict)
-7. Create `tests/test_audio_extractor.py` with mocked yt-dlp
-8. Run `uv run pytest tests/test_audio_extractor.py`
-9. Run `uv run ruff check src/subsync/audio_extractor.py`
+1. [x] Create `src/subsync/audio_extractor.py` with module docstring
+2. [x] Implement `get_video_metadata()` with yt-dlp `YoutubeDL` context manager
+3. [x] Configure yt-dlp options: `quiet=True`, `no_warnings=True`, `extract_flat=False`
+4. [x] Map info dict fields to `VideoMetadata`
+5. [x] Add error mapping logic (parse yt-dlp error messages for classification)
+6. [x] Add live stream detection (`is_live` field in info dict)
+7. [x] Create `tests/test_audio_extractor.py` with mocked yt-dlp
+8. [x] Run `uv run pytest tests/test_audio_extractor.py`
+9. [x] Run `uv run ruff check src/subsync/audio_extractor.py`
 
 ### Definition of Done
 
@@ -178,13 +178,13 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `download_audio` returns a `Path` to a valid WAV file
-- [ ] Output file is 16kHz, mono WAV
-- [ ] Progress callback receives values between 0.0 and 1.0
-- [ ] Download errors raise `VideoUnavailableError`
-- [ ] Output file is in the specified `output_dir`
-- [ ] Unit tests cover success path and error cases (mocked yt-dlp)
-- [ ] Type hints on all function signatures
+- [x] `download_audio` returns a `Path` to a valid WAV file
+- [x] Output file is 16kHz, mono WAV
+- [x] Progress callback receives values between 0.0 and 1.0
+- [x] Download errors raise `VideoUnavailableError`
+- [x] Output file is in the specified `output_dir`
+- [x] Unit tests cover success path and error cases (mocked yt-dlp)
+- [x] Type hints on all function signatures
 
 ### Test Scenarios
 
@@ -198,17 +198,17 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Add `download_audio()` to `audio_extractor.py`
-2. Configure yt-dlp download options:
+1. [x] Add `download_audio()` to `audio_extractor.py`
+2. [x] Configure yt-dlp download options:
    - `format`: `"bestaudio/best"`
    - `postprocessors`: FFmpeg extract audio to WAV
    - `postprocessor_args`: `["-ar", "16000", "-ac", "1"]` (16kHz mono)
    - `outtmpl`: `output_dir / "{video_id}.%(ext)s"`
-3. Implement progress hook adapter (yt-dlp `d["status"]` → callback float)
-4. Add error handling and mapping
-5. Verify output file existence
-6. Add tests to `tests/test_audio_extractor.py`
-7. Run tests and linter
+3. [x] Implement progress hook adapter (yt-dlp `d["status"]` → callback float)
+4. [x] Add error handling and mapping
+5. [x] Verify output file existence
+6. [x] Add tests to `tests/test_audio_extractor.py`
+7. [x] Run tests and linter
 
 ### Definition of Done
 
@@ -253,14 +253,14 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `transcribe_audio` returns a `TranscriptionResult`
-- [ ] Segments contain word-level timestamps when available
-- [ ] Language is auto-detected when `config.language` is None
-- [ ] Device resolution works for auto/cuda/cpu
-- [ ] Whisper errors are wrapped in `TranscriptionError`
-- [ ] Default config is used when `config` parameter is None
-- [ ] Unit tests cover all paths (mocked whisper)
-- [ ] Type hints on all function signatures
+- [x] `transcribe_audio` returns a `TranscriptionResult`
+- [x] Segments contain word-level timestamps when available
+- [x] Language is auto-detected when `config.language` is None
+- [x] Device resolution works for auto/cuda/cpu
+- [x] Whisper errors are wrapped in `TranscriptionError`
+- [x] Default config is used when `config` parameter is None
+- [x] Unit tests cover all paths (mocked whisper)
+- [x] Type hints on all function signatures
 
 ### Test Scenarios
 
@@ -279,15 +279,15 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Create `src/subsync/transcriber.py` with module docstring
-2. Implement device resolution helper: `_resolve_device(device: str) -> str`
-3. Implement `transcribe_audio()`
-4. Map whisper result dict to `TranscriptionResult` / `TranscriptionSegment` / `Word`
-5. Handle edge cases: missing words, empty segments
-6. Wrap all whisper/torch exceptions in `TranscriptionError`
-7. Handle CUDA OOM specifically — include actionable message (suggest smaller model or CPU)
-8. Create `tests/test_transcriber.py` with comprehensive mocked tests
-9. Run tests and linter
+1. [x] Create `src/subsync/transcriber.py` with module docstring
+2. [x] Implement device resolution helper: `_resolve_device(device: str) -> str`
+3. [x] Implement `transcribe_audio()`
+4. [x] Map whisper result dict to `TranscriptionResult` / `TranscriptionSegment` / `Word`
+5. [x] Handle edge cases: missing words, empty segments
+6. [x] Wrap all whisper/torch exceptions in `TranscriptionError`
+7. [x] Handle CUDA OOM specifically — include actionable message (suggest smaller model or CPU)
+8. [x] Create `tests/test_transcriber.py` with comprehensive mocked tests
+9. [x] Run tests and linter
 
 ### Definition of Done
 
@@ -318,12 +318,12 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] Context manager yields a valid `Path` to an existing directory
-- [ ] Directory and contents are removed after context exits normally
-- [ ] Directory and contents are removed after context exits via exception
-- [ ] Temp directory name starts with `subsync_`
-- [ ] Creation and cleanup are logged at DEBUG level
-- [ ] Unit tests verify both cleanup paths
+- [x] Context manager yields a valid `Path` to an existing directory
+- [x] Directory and contents are removed after context exits normally
+- [x] Directory and contents are removed after context exits via exception
+- [x] Temp directory name starts with `subsync_`
+- [x] Creation and cleanup are logged at DEBUG level
+- [x] Unit tests verify both cleanup paths
 
 ### Test Scenarios
 
@@ -336,10 +336,10 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Create `src/subsync/pipeline.py` with module docstring
-2. Implement `pipeline_temp_dir()` context manager using `tempfile.TemporaryDirectory`
-3. Create `tests/test_pipeline.py` with cleanup tests
-4. Run tests and linter
+1. [x] Create `src/subsync/pipeline.py` with module docstring
+2. [x] Implement `pipeline_temp_dir()` context manager using `tempfile.TemporaryDirectory`
+3. [x] Create `tests/test_pipeline.py` with cleanup tests
+4. [x] Run tests and linter
 
 ---
 
@@ -380,14 +380,14 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `process_video` accepts a YouTube URL and returns `(VideoMetadata, TranscriptionResult)`
-- [ ] All pipeline stages execute in order
-- [ ] Temporary files are cleaned up after processing
-- [ ] Progress callback reports stage names and progress values
-- [ ] SubSync exceptions propagate unchanged
-- [ ] Unexpected exceptions are wrapped in `SubSyncError`
-- [ ] Unit tests cover the full pipeline with all components mocked
-- [ ] Type hints on all function signatures
+- [x] `process_video` accepts a YouTube URL and returns `(VideoMetadata, TranscriptionResult)`
+- [x] All pipeline stages execute in order
+- [x] Temporary files are cleaned up after processing
+- [x] Progress callback reports stage names and progress values
+- [x] SubSync exceptions propagate unchanged
+- [x] Unexpected exceptions are wrapped in `SubSyncError`
+- [x] Unit tests cover the full pipeline with all components mocked
+- [x] Type hints on all function signatures
 
 ### Test Scenarios
 
@@ -403,12 +403,12 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Add `process_video()` to `pipeline.py`
-2. Implement progress mapping helpers for download (5–50%) and transcription (50–100%)
-3. Wire all components together inside `pipeline_temp_dir()`
-4. Add tests to `tests/test_pipeline.py`
-5. Run full test suite: `uv run pytest`
-6. Run linter: `uv run ruff check .`
+1. [x] Add `process_video()` to `pipeline.py`
+2. [x] Implement progress mapping helpers for download (5–50%) and transcription (50–100%)
+3. [x] Wire all components together inside `pipeline_temp_dir()`
+4. [x] Add tests to `tests/test_pipeline.py`
+5. [x] Run full test suite: `uv run pytest`
+6. [x] Run linter: `uv run ruff check .`
 
 ### Definition of Done
 
@@ -441,12 +441,12 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Acceptance Criteria
 
-- [ ] `ProgressMapper` maps sub-progress to overall range
-- [ ] `update(0.0)` → callback receives `start` value
-- [ ] `update(1.0)` → callback receives `end` value
-- [ ] `update(0.5)` with range `(0.1, 0.5)` → callback receives `0.3`
-- [ ] None callback → no errors (no-op)
-- [ ] Unit tests cover mapping math and edge cases
+- [x] `ProgressMapper` maps sub-progress to overall range
+- [x] `update(0.0)` → callback receives `start` value
+- [x] `update(1.0)` → callback receives `end` value
+- [x] `update(0.5)` with range `(0.1, 0.5)` → callback receives `0.3`
+- [x] None callback → no errors (no-op)
+- [x] Unit tests cover mapping math and edge cases
 
 ### Test Scenarios
 
@@ -460,10 +460,10 @@ From [the plan](../plan/phase-2-core-pipeline.md):
 
 ### Implementation Checklist
 
-1. Create `src/subsync/progress.py`
-2. Implement `ProgressMapper`
-3. Create `tests/test_progress.py`
-4. Run tests and linter
+1. [x] Create `src/subsync/progress.py`
+2. [x] Implement `ProgressMapper`
+3. [x] Create `tests/test_progress.py`
+4. [x] Run tests and linter
 
 ---
 
@@ -504,19 +504,26 @@ src/subsync/
 
 ### Acceptance Criteria
 
-- [ ] All unit tests pass
-- [ ] Linting produces no errors
-- [ ] Formatting is consistent
-- [ ] All new modules are importable
-- [ ] No phase 1 regressions
+- [x] All unit tests pass
+- [x] Linting produces no errors
+- [x] Formatting is consistent
+- [x] All new modules are importable
+- [x] No phase 1 regressions
 
 ### Implementation Checklist
 
-1. Run `uv run pytest` — verify all tests pass
-2. Run `uv run ruff check .` — verify no lint errors
-3. Run `uv run ruff format --check .` — verify formatting
-4. Verify module imports: `uv run python -c "from subsync import audio_extractor, transcriber, pipeline, progress"`
-5. Review test coverage for new modules
+1. [x] Run `uv run pytest` — verify all tests pass
+2. [x] Run `uv run ruff check .` — verify no lint errors
+3. [x] Run `uv run ruff format --check .` — verify formatting
+4. [x] Verify module imports: `uv run python -c "from subsync import audio_extractor, transcriber, pipeline, progress"`
+5. [x] Review test coverage for new modules
+
+### Verification
+
+- Test run: `uv run pytest` — 87 passed, 0 failed.
+- Lint: `uv run ruff check .` — All checks passed.
+- Format: `uv run ruff format --check .` — 15 files already formatted.
+- Imports: `from subsync import audio_extractor, transcriber, pipeline, progress` — All modules importable.
 
 ### Definition of Done
 
@@ -543,16 +550,16 @@ Tasks 2–4 can be developed somewhat independently but are ordered for logical 
 
 ## Definition of Done (Phase Level)
 
-- [ ] `yt-dlp` and `openai-whisper` installed and importable
-- [ ] `audio_extractor.py` implements `get_video_metadata()` and `download_audio()`
-- [ ] `transcriber.py` implements `transcribe_audio()` with device auto-detection
-- [ ] `pipeline.py` implements `pipeline_temp_dir()` and `process_video()`
-- [ ] `progress.py` implements `ProgressMapper`
-- [ ] All yt-dlp errors map to SubSync exception hierarchy
-- [ ] Temporary files are cleaned up on success and failure
-- [ ] `uv run pytest` passes with no failures
-- [ ] `uv run ruff check .` passes with no errors
-- [ ] `uv run ruff format --check .` reports no changes needed
+- [x] `yt-dlp` and `openai-whisper` installed and importable
+- [x] `audio_extractor.py` implements `get_video_metadata()` and `download_audio()`
+- [x] `transcriber.py` implements `transcribe_audio()` with device auto-detection
+- [x] `pipeline.py` implements `pipeline_temp_dir()` and `process_video()`
+- [x] `progress.py` implements `ProgressMapper`
+- [x] All yt-dlp errors map to SubSync exception hierarchy
+- [x] Temporary files are cleaned up on success and failure
+- [x] `uv run pytest` passes with no failures
+- [x] `uv run ruff check .` passes with no errors
+- [x] `uv run ruff format --check .` reports no changes needed
 
 ---
 
