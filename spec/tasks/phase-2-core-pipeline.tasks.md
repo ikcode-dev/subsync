@@ -4,7 +4,24 @@
 > Based on [phase-2-core-pipeline.md](../plan/phase-2-core-pipeline.md).
 
 **Dependencies**: Phase 1 complete
-**Context**: [dependencies.md](../context/dependencies.md), [data-models.md](../context/data-models.md)
+**Context**: [dependencies.md](../context/dependencies.md), [data-models.md](../context/data-models.md), [netflix-compliance.md](../context/netflix-compliance.md)
+
+---
+
+## Phase-Level Acceptance Criteria
+
+From [the plan](../plan/phase-2-core-pipeline.md):
+
+- [ ] Can extract metadata from public YouTube videos
+- [ ] Can download and extract audio to WAV format
+- [ ] Can transcribe audio with Whisper
+- [ ] Word timestamps are included when available
+- [ ] Language auto-detection works
+- [ ] GPU used when available, CPU fallback works
+- [ ] Temporary files are cleaned up automatically
+- [ ] Progress is reported during long operations
+- [ ] All unit tests pass
+- [ ] Error cases produce clear, actionable messages
 
 ---
 
@@ -63,6 +80,15 @@
 - Output: `VideoMetadata` dataclass (already defined in `models.py`)
 - Uses yt-dlp's `extract_info(download=False)` to avoid downloading
 - Must map yt-dlp errors to SubSync error hierarchy (`errors.py`)
+
+**Error Mapping** (from plan):
+
+| yt-dlp Condition | SubSync Error |
+|------------------|---------------|
+| Video unavailable | `VideoUnavailableError` |
+| Private video | `VideoUnavailableError` |
+| Age-restricted | `AgeRestrictedError` |
+| Live stream | `LiveStreamError` |
 
 ### Requirements
 
@@ -223,6 +249,7 @@
    - Each segment's `"words"` → list of `Word`
 7. Handle missing word timestamps gracefully (empty `words` list)
 8. Wrap Whisper exceptions in `TranscriptionError`
+9. Handle GPU out-of-memory: catch CUDA OOM error and log a warning suggesting a smaller model or CPU — do not auto-retry (let the caller decide)
 
 ### Acceptance Criteria
 
@@ -248,6 +275,7 @@
 | 7 | Whisper model load fails | Mock `whisper.load_model` raises | `TranscriptionError` |
 | 8 | Whisper transcribe fails | Mock `model.transcribe` raises | `TranscriptionError` |
 | 9 | Default config used | `config=None` | Uses `TranscriptionConfig()` defaults |
+| 10 | GPU out-of-memory | Mock `model.transcribe` raises CUDA OOM | `TranscriptionError` with OOM context in message |
 
 ### Implementation Checklist
 
@@ -257,8 +285,9 @@
 4. Map whisper result dict to `TranscriptionResult` / `TranscriptionSegment` / `Word`
 5. Handle edge cases: missing words, empty segments
 6. Wrap all whisper/torch exceptions in `TranscriptionError`
-7. Create `tests/test_transcriber.py` with comprehensive mocked tests
-8. Run tests and linter
+7. Handle CUDA OOM specifically — include actionable message (suggest smaller model or CPU)
+8. Create `tests/test_transcriber.py` with comprehensive mocked tests
+9. Run tests and linter
 
 ### Definition of Done
 
@@ -339,7 +368,7 @@
    - `progress`: 0.0–1.0 overall progress
    - `stage`: human-readable stage name (e.g., `"Downloading audio"`)
 4. Pipeline steps:
-   a. Parse URL via `extract_video_id()` from `url_handler.py`
+   a. Parse URL via `parse_youtube_url()` from `url_handler.py`
    b. Get metadata via `get_video_metadata()`
    c. Create temp directory
    d. Download audio via `download_audio()` — map download progress to 5–50%
@@ -509,3 +538,24 @@ Task 1: Add Core Dependencies
 ```
 
 Tasks 2–4 can be developed somewhat independently but are ordered for logical progression. Task 6 depends on Tasks 2–5 and 7. Task 8 is always last.
+
+---
+
+## Definition of Done (Phase Level)
+
+- [ ] `yt-dlp` and `openai-whisper` installed and importable
+- [ ] `audio_extractor.py` implements `get_video_metadata()` and `download_audio()`
+- [ ] `transcriber.py` implements `transcribe_audio()` with device auto-detection
+- [ ] `pipeline.py` implements `pipeline_temp_dir()` and `process_video()`
+- [ ] `progress.py` implements `ProgressMapper`
+- [ ] All yt-dlp errors map to SubSync exception hierarchy
+- [ ] Temporary files are cleaned up on success and failure
+- [ ] `uv run pytest` passes with no failures
+- [ ] `uv run ruff check .` passes with no errors
+- [ ] `uv run ruff format --check .` reports no changes needed
+
+---
+
+## Next Phase
+
+Phase 2 complete → proceed to **[Phase 3: Netflix Compliance](../plan/phase-3-netflix-compliance.md)**, which processes `TranscriptionResult` into Netflix-compliant subtitles.
