@@ -1,6 +1,3 @@
----
-applyTo: "spec/plan/**"
----
 # Plan Files Guidelines
 
 Plan files define **implementation strategies**—the high-level approach for building features or phases. They describe **what** to build and **why**, leaving **how** to the implementation phase.
@@ -42,7 +39,7 @@ Use descriptive names that identify the feature or phase:
 
 ## Structure Template
 
-```markdown
+````markdown
 # [Feature/Phase Name]
 
 ## Overview
@@ -88,7 +85,7 @@ What error conditions exist and how they should be communicated.
 ## Acceptance Criteria
 - [ ] Criterion 1
 - [ ] Criterion 2
-```
+````
 
 ## Principles
 

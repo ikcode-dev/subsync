@@ -201,7 +201,7 @@ We follow Spec-Driven Development:
 5. **Test** — Ensure all tests pass and linting is clean
 6. **Submit PR** — Reference the task and plan in your pull request
 
-Questions? Check the [Copilot Instructions](.github/copilot-instructions.md) for detailed coding conventions and architecture patterns.
+Questions? Check [AGENTS.md](AGENTS.md) for detailed coding conventions and architecture patterns.
 
 ## License
 

@@ -1,6 +1,3 @@
----
-applyTo: "spec/tasks/**"
----
 # Task Files Guidelines
 
 Task files define **atomic, verifiable work units**. Each task describes **what** and **why** needs to be accomplished and how to verify it's done, leaving **how** to implement to the developer.
@@ -62,7 +59,9 @@ Use for:
 
 ## File Naming
 
-Use numbered, descriptive names within phase folders:
+Two layouts exist in this directory. Match the layout of the phase you are working in.
+
+**Per-phase folder** with a README and numbered task files (used by phase 1):
 ```
 spec/tasks/
   phase-1/
@@ -70,6 +69,12 @@ spec/tasks/
     01-install-deps.md
     02-error-handling.md
     03-data-models.md
+```
+
+**Consolidated file** with all tasks for a phase as sections of one document (used by phase 2):
+```
+spec/tasks/
+  phase-2-core-pipeline.tasks.md
 ```
 
 ## Structure Template

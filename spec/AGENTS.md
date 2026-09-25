@@ -1,6 +1,3 @@
----
-applyTo: "spec/**"
----
 # Spec Directory Guidelines
 
 The `spec/` directory contains the **specification** for the project—defining **what** to build and **why**, never **how** to implement it.
@@ -12,6 +9,8 @@ The `spec/` directory contains the **specification** for the project—defining 
 | `spec/context/` | Domain knowledge, constraints, research, external references |
 | `spec/plan/` | Feature/phase implementation strategies and architecture |
 | `spec/tasks/` | Atomic, verifiable work units with acceptance criteria |
+
+Each subdirectory has its own `AGENTS.md` with file-specific rules and templates.
 
 ## Core Principle
 

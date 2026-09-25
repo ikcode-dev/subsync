@@ -1,6 +1,3 @@
----
-applyTo: "spec/context/**"
----
 # Context Files Guidelines
 
 Context files capture **domain knowledge** that informs the project. They are reference material—facts, constraints, and research findings.
