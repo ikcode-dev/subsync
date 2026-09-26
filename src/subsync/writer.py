@@ -1,10 +1,13 @@
-"""Render subtitles as SRT and write them out in one step.
+"""Render subtitles as SRT and write them out without a partial file.
 
 ``render_srt`` turns a list of :class:`~subsync.models.Subtitle` into SRT
 text (E9). ``write_output`` then writes that text to disk so that no
 partial or half-written file can ever appear: the full content goes to a
 temporary file in the target folder first, and only then is it published
-under the final name, in a single filesystem operation (R17).
+under the final name (R17). Where hard links work, that publish is a
+single filesystem operation; where they don't (exFAT, FAT32), it is an
+exclusive reservation followed by a replace, during which the final name
+is briefly visible as an empty file.
 """
 
 import logging
@@ -81,15 +84,18 @@ def _default_file_mode() -> int:
 
 
 def write_output(content: str, path: Path, force: bool) -> None:
-    """Write ``content`` to ``path`` in one step; never leaves a partial file.
+    """Write ``content`` to ``path``; never leaves a partial file.
 
     The content is encoded as UTF-8 without a BOM and written in full to a
-    temporary file in ``path``'s folder. Publishing under the final name is
-    then a single step: without ``force`` it fails if the name already
-    exists (no check-then-replace race), and with ``force`` it replaces the
-    existing file. The temporary file never survives the call, on any
-    outcome, including ``KeyboardInterrupt``, which is left to propagate
-    unchanged.
+    temporary file in ``path``'s folder. Publishing under the final name
+    comes next: without ``force`` it fails if the name already exists (no
+    check-then-replace race), and with ``force`` it replaces the existing
+    file. Where hard links work, that publish is a single filesystem
+    operation; where they don't (exFAT, FAT32), it is an exclusive
+    reservation followed by a replace, during which the final name is
+    briefly visible as an empty file (see ``_publish_no_clobber``). The
+    temporary file never survives the call, on any outcome, including
+    ``KeyboardInterrupt``, which is left to propagate unchanged.
 
     Args:
         content: The full file content to write.
