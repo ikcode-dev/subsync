@@ -1,8 +1,10 @@
 """Shared pytest fixtures for the SubSync test suite."""
 
 import logging
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -32,3 +34,18 @@ def _isolate_root_logging() -> Iterator[None]:
     """Run every test inside ``isolated_root_logging``."""
     with isolated_root_logging():
         yield
+
+
+@pytest.fixture
+def run_tmpdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the process temp folder at a fresh, empty test folder.
+
+    ``pipeline_temp_dir`` creates ``subsync_*`` folders there, so a test can
+    assert that none is left behind. Both ``TMPDIR`` and the cached
+    ``tempfile.tempdir`` are set, since the latter wins once computed.
+    """
+    folder = tmp_path / "run-tmp"
+    folder.mkdir()
+    monkeypatch.setenv("TMPDIR", str(folder))
+    monkeypatch.setattr(tempfile, "tempdir", str(folder))
+    return folder
