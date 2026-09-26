@@ -444,6 +444,30 @@ class TestSummarizeUnexpectedException:
         assert "✗ Something went wrong: RuntimeError." in captured.err
 
 
+class TestSeamStubNotWiredUp:
+    """Until S1.7 fills the seam, a resolvable input still fails visibly.
+
+    Decision 0009: exit 0 must mean a file was written. Before S1.7 wires
+    up the writer, `run_generate` must not return 0 for an input it can
+    resolve, or a "successful" run would silently write nothing.
+
+    Refs: S1.6-Q4
+    """
+
+    def test_existing_file_fails_with_not_wired_up_message(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"fake")
+
+        rc = cli.main(["generate", str(video)])
+
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert captured.out == ""
+        assert "✗ generate is not wired up yet." in captured.err
+
+
 # Scenario 13
 class TestFastStartup:
     """Running a stage 0/1 failure must not import the ML stack."""
