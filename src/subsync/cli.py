@@ -336,7 +336,9 @@ def _summary_lines(
     return lines
 
 
-_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+_ESCAPED = frozenset(
+    "\u2028\u2029\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+)
 
 
 def _safe(text: str) -> str:
@@ -345,12 +347,12 @@ def _safe(text: str) -> str:
     File names and transcribed text are untrusted: an escape sequence in a
     file name could otherwise retitle the window, hide lines or write the
     clipboard. Control characters (C0, DEL, C1) and bidirectional overrides
-    are shown as ``\\x1b``-style escapes; everything else, emoji included,
+    and line or paragraph separators are shown as ``\\x1b``-style escapes; everything else, emoji included,
     is printed as is. The subtitle file itself is never altered (0008).
     """
     return "".join(
         ch.encode("unicode_escape").decode("ascii")
-        if unicodedata.category(ch) == "Cc" or ch in _BIDI_CONTROLS
+        if unicodedata.category(ch) == "Cc" or ch in _ESCAPED
         else ch
         for ch in text
     )
@@ -361,12 +363,12 @@ class _SafeFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the record, then make each of its lines safe to print."""
-        return "\n".join(_safe(line) for line in super().format(record).splitlines())
+        return "\n".join(_safe(line) for line in super().format(record).split("\n"))
 
 
 def _print_traceback() -> None:
     """Print the current exception's traceback to stderr (``-v`` only)."""
-    for line in traceback.format_exc().splitlines():
+    for line in traceback.format_exc().rstrip("\n").split("\n"):
         print(_safe(line), file=sys.stderr)
 
 

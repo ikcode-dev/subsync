@@ -709,3 +709,20 @@ def test_control_characters_in_an_error_message_are_escaped(
     assert out == ""
     assert "\x1b" not in err and "\x07" not in err
     assert "✗ Can't read clip\\x1b]0;PWNED\\x07.mov as audio or video." in err
+
+
+def test_line_separators_in_verbose_output_are_escaped(
+    tone: Path,
+    videos: Path,
+    run_tmpdir: Path,
+    stand_in: StandInTranscriber,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A NEL or U+2028 in a name can't start a fake line, even with -v."""
+    crafted = tone.rename(videos / "ep42\x85fake\u2028line.mp4")
+
+    rc, _, err = run(["generate", str(crafted), "-v"], capsys)
+
+    assert rc == 0, err
+    assert "\x85" not in err and "\u2028" not in err
+    assert not any(line.startswith("fake") for line in err.splitlines())
