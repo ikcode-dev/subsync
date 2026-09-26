@@ -30,18 +30,18 @@ Settled during planning on 2026-09-25. Details and rationale are in the phase-4 
 
 ## Slice-Level Acceptance Criteria
 
-- [ ] `subsync generate <file>` writes `<input folder>/<stem>.<lang>.srt` and exits 0 (R1, R14)
-- [ ] The written SRT passes the invariant checker: 0 overlaps, 0 gaps under 83 ms, no subtitle over 7 s, ≤ 2 lines, ≤ 42 chars except single long words (R8, R9, R12)
-- [ ] Long words are unchanged and listed with their timestamp in the summary (R12)
-- [ ] A second run exits 5 in about 1 s, before any extraction or model load (R15, U1)
-- [ ] Missing FFmpeg fails in under 1 s with the install hint (R24)
-- [ ] The file route makes no network calls once the model is cached (R4)
-- [ ] Every S1 failure row (F1–F4, F6–F9, F11, F12, F19–F25) shows its message and next step; no traceback unless `-v` (R20, R21)
-- [ ] Exit codes 0, 1, 2, 4, 5 and 130 are each covered by a CLI test (R22)
-- [ ] Ctrl+C exits 130 within 2 s, writes nothing and leaves no temp files (R23)
-- [ ] The opt-in e2e suite passes on Igor's Mac (`task test:e2e`)
+- [x] `subsync generate <file>` writes `<input folder>/<stem>.<lang>.srt` and exits 0 (R1, R14)
+- [x] The written SRT passes the invariant checker: 0 overlaps, 0 gaps under 83 ms, no subtitle over 7 s, ≤ 2 lines, ≤ 42 chars except single long words (R8, R9, R12)
+- [x] Long words are unchanged and listed with their timestamp in the summary (R12)
+- [x] A second run exits 5 in about 1 s, before any extraction or model load (R15, U1)
+- [x] Missing FFmpeg fails in under 1 s with the install hint (R24)
+- [x] The file route makes no network calls once the model is cached (R4)
+- [x] Every S1 failure row (F1–F4, F6–F9, F11, F12, F19–F25) shows its message and next step; no traceback unless `-v` (R20, R21)
+- [x] Exit codes 0, 1, 2, 4, 5 and 130 are each covered by a CLI test (R22)
+- [x] Ctrl+C exits 130 within 2 s, writes nothing and leaves no temp files (R23)
+- [x] The opt-in e2e suite passes on Igor's Mac (`task test:e2e`)
 - [ ] One real episode is uploaded to YouTube Studio "With timing" and accepted (A3); total time recorded for N1
-- [ ] `task test` and `task lint` pass
+- [x] `task test` and `task lint` pass
 
 ### Requirement Coverage
 
@@ -632,7 +632,7 @@ ep42.mov · 14:52 · local file
 
 - [x] Integration scenarios I1–I18 pass in the default suite
 - [x] E2E scenarios E1–E4 pass with `task test:e2e` on Igor's Mac
-- [ ] The slice-level acceptance criteria, except the manual ones in S1.8, are ticked
+- [x] The slice-level acceptance criteria, except the manual ones in S1.8, are ticked
 - [x] `uv run pytest`, `uv run pytest -m e2e` and `uv run ruff check .` pass
 
 ### Test Scenarios
