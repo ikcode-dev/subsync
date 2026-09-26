@@ -244,6 +244,16 @@ class TestSplitting:
 
         assert [sub.text for sub in subtitles] == [first, second]
 
+    def test_split_after_punctuation_beats_a_more_even_split(self):
+        """The sentence end wins even when a mid-sentence cut is more even."""
+        first = "We start with a clean project folder."
+        second = "Then we add the dependencies we need and write our very first test."
+        result = transcript(segment(f"{first} {second}", 0.0, 6.0))
+
+        subtitles, _ = process_and_check(result)
+
+        assert [sub.text for sub in subtitles] == [first, second]
+
     def test_interpolates_word_times_without_word_timestamps(self):
         """Scenario 8: a 120-character segment with ``words=[]``."""
         text = (
@@ -476,6 +486,16 @@ class TestLines:
 
         assert [sub.lines for sub in subtitles] == [
             ["We install the package,", "then we run the tests."]
+        ]
+
+    def test_punctuation_wins_over_a_more_balanced_break(self):
+        """A break after punctuation is preferred to a more balanced one."""
+        text = "We install the package with uv, then run the tests."
+
+        subtitles, _ = process_and_check(transcript(segment(text, 0.0, 3.5)))
+
+        assert [sub.lines for sub in subtitles] == [
+            ["We install the package with uv,", "then run the tests."]
         ]
 
     def test_balanced_break_without_punctuation(self):
@@ -773,9 +793,17 @@ VOCABULARY = [
     "supercalifragilisticexpialidocious-and-then-some-more",
 ]  # fmt: skip
 
-TIGHT_CONFIG = ProcessingConfig(
-    max_chars_per_line=30, min_duration_ms=1000, max_duration_ms=5000, min_gap_ms=120
-)
+# Every fourth transcript uses other limits, so nothing may be hard-coded.
+OTHER_CONFIGS = [
+    ProcessingConfig(
+        max_chars_per_line=30,
+        min_duration_ms=1000,
+        max_duration_ms=5000,
+        min_gap_ms=120,
+    ),
+    ProcessingConfig(max_chars_per_line=20, max_lines=3),
+    ProcessingConfig(max_lines=1, min_gap_ms=0),
+]
 
 
 def random_word_text(rng: random.Random) -> str:
@@ -856,7 +884,11 @@ def test_seeded_random_adversarial_transcripts():
     checked_subtitles = 0
     for case in range(200):
         result = random_transcript(rng)
-        config = TIGHT_CONFIG if case % 4 == 3 else ProcessingConfig()
+        config = (
+            OTHER_CONFIGS[case // 4 % len(OTHER_CONFIGS)]
+            if case % 4 == 3
+            else ProcessingConfig()
+        )
         try:
             subtitles, report = process_transcription(result, config)
             check_output(result, subtitles, report, config)
