@@ -159,9 +159,18 @@ def run_generate(args: argparse.Namespace) -> int:
 
 
 def _summarize(exc: BaseException) -> str:
-    """One-line summary of an unexpected exception, for the F25 message."""
-    text = str(exc) or exc.__class__.__name__
-    return text.splitlines()[0]
+    """One-line summary of an unexpected exception, for the F25 message.
+
+    Takes the first non-blank, stripped line of ``str(exc)`` and drops one
+    trailing period (the caller adds its own), so the F25 message never
+    doubles a period or ends up blank. Falls back to the exception's class
+    name when the message has no non-blank line at all.
+    """
+    for raw_line in str(exc).splitlines():
+        line = raw_line.strip()
+        if line:
+            return line[:-1] if line.endswith(".") else line
+    return exc.__class__.__name__
 
 
 def _print_error(err: SubSyncError) -> None:
