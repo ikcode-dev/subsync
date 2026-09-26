@@ -341,6 +341,74 @@ class TestLoadModel:
         assert loaded.name == "turbo"
         assert loaded.engine is mock_engine
 
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_download_bar_and_warnings_are_quiet(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+        capfd: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """S1.5-Q3: load_model is the only place the real download bar is drawn.
+
+        transcribe_with_model has its own quiet-output tests, but load_model
+        wraps its own separate call to whisper.load_model() in
+        _quiet_whisper_output(); nothing exercised that wrapping directly.
+        """
+
+        def fake_load_model(*args: object, **kwargs: object) -> MagicMock:
+            sys.stderr.write("13%|#         | 130M/1.00G [00:05<00:30, 30.0MiB/s]\r")
+            warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+            return MagicMock()
+
+        mock_whisper.load_model.side_effect = fake_load_model
+        config = TranscriptionConfig(model_name="turbo")
+
+        with caplog.at_level(logging.DEBUG, logger="subsync.transcriber"):
+            load_model(config)
+
+        captured = capfd.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("MiB/s" in m for m in messages), messages
+        assert any("FP16" in m for m in messages), messages
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_keyboard_interrupt_propagates_when_cached(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q3: KeyboardInterrupt during a cached load is never caught."""
+        mock_whisper.load_model.side_effect = KeyboardInterrupt()
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(KeyboardInterrupt):
+            load_model(config)
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_keyboard_interrupt_propagates_when_not_cached(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q3: KeyboardInterrupt during a first download is never caught."""
+        mock_whisper.load_model.side_effect = KeyboardInterrupt()
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(KeyboardInterrupt):
+            load_model(config)
+
 
 # =============================================================================
 # transcribe_with_model tests (Scenarios 5, 6, 7)
