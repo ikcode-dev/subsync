@@ -22,6 +22,24 @@ class TestExistingFile:
         assert source.output_dir == video.resolve().parent
         assert source.path == video.resolve()
 
+    def test_symlinked_input_is_named_after_the_link(self, tmp_path: Path) -> None:
+        """R14: subtitles go next to the path given, named after it."""
+        renders = tmp_path / "renders"
+        renders.mkdir()
+        target = renders / "final-v3.mov"
+        target.write_bytes(b"fake")
+        videos = tmp_path / "Videos"
+        videos.mkdir()
+        link = videos / "ep42.mov"
+        link.symlink_to(target)
+
+        source = resolve_input(str(link))
+
+        assert source.display_name == "ep42.mov"
+        assert source.output_stem == "ep42"
+        assert source.output_dir == videos
+        assert source.path == link
+
     def test_relative_path_resolves_to_absolute(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
