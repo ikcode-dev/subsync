@@ -9,12 +9,14 @@ stand-in to test the error boundary in `main` independently of input
 resolution.
 """
 
+import logging
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from subsync import cli
+from subsync import catalog, cli
 from subsync.errors import (
     AgeRestrictedError,
     DependencyError,
@@ -32,6 +34,30 @@ from subsync.errors import (
     URLParseError,
     VideoUnavailableError,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_root_logging() -> Iterator[None]:
+    """Undo `main`'s `logging.basicConfig(..., force=True)` after each test.
+
+    `main` reconfigures the *root* logger on every call so that `-v` turns
+    on DEBUG logging in the real CLI process. In-process tests share that
+    same root logger across the whole pytest session, so without this
+    reset a `-v` test would leave DEBUG (and a `StreamHandler` bound to
+    that test's now-torn-down `capsys` stream) in place for every test
+    that runs after it. See `TestVerboseLoggingIsolation` below for a
+    regression test that fails without this fixture.
+
+    Refs: S1.6-Q5
+    """
+    root = logging.getLogger()
+    original_handlers = list(root.handlers)
+    original_level = root.level
+    try:
+        yield
+    finally:
+        root.handlers = original_handlers
+        root.setLevel(original_level)
 
 
 # Scenario 1
