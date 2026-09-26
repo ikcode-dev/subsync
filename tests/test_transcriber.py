@@ -374,6 +374,107 @@ class TestTranscribeWithModel:
 
 
 # =============================================================================
+# Exact error wording (S1.5-Q4): F19, F20, F21, and the generic load failure
+# =============================================================================
+
+
+class TestErrorWording:
+    """Exact headline and hint text for each failure category.
+
+    Reasons are chosen to differ from the fixed part of the headline, so
+    these assertions cannot pass by coincidentally matching a hard-coded
+    template that ignores the actual reason.
+    """
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_f19_model_download_error_wording(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """F19: not cached, download fails → exact headline and hint."""
+        mock_whisper.load_model.side_effect = RuntimeError("network unreachable")
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            load_model(config)
+
+        assert str(exc_info.value) == (
+            "Couldn't download model 'turbo': network unreachable."
+        )
+        assert exc_info.value.hint == "An internet connection is needed once per model."
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_f20_model_memory_error_wording_at_load(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """F20: out of memory while loading → exact headline and hint."""
+        mock_whisper.load_model.side_effect = RuntimeError(
+            "CUDA out of memory. Tried to allocate 4.00 GiB"
+        )
+        config = TranscriptionConfig(model_name="large-v3")
+
+        with pytest.raises(ModelMemoryError) as exc_info:
+            load_model(config)
+
+        assert str(exc_info.value) == "Ran out of memory with model 'large-v3'."
+        assert exc_info.value.hint == "Try a smaller one: -m small"
+
+    def test_f20_model_memory_error_wording_at_transcribe(self) -> None:
+        """F20: out of memory while transcribing → exact headline and hint."""
+        engine = MagicMock()
+        engine.transcribe.side_effect = RuntimeError(
+            "CUDA out of memory. Tried to allocate 4.00 GiB"
+        )
+        model = LoadedModel(name="large-v3", device="CPU", engine=engine)
+
+        with pytest.raises(ModelMemoryError) as exc_info:
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        assert str(exc_info.value) == "Ran out of memory with model 'large-v3'."
+        assert exc_info.value.hint == "Try a smaller one: -m small"
+
+    def test_f21_transcription_error_wording(self) -> None:
+        """F21: other transcription failure → exact headline and hint."""
+        engine = MagicMock()
+        engine.transcribe.side_effect = RuntimeError("boom")
+        model = LoadedModel(name="turbo", device="CPU", engine=engine)
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        assert str(exc_info.value) == "Transcription failed: boom."
+        assert exc_info.value.hint == "Re-run with -v for details."
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_generic_load_failure_wording(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """A cached model's other load failure names loading, not download."""
+        mock_whisper.load_model.side_effect = RuntimeError("boom")
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            load_model(config)
+
+        assert str(exc_info.value) == "Couldn't load model 'turbo': boom."
+        assert exc_info.value.hint == "Re-run with -v for details."
+
+
+# =============================================================================
 # transcribe_audio tests (Scenario 9 — unchanged behavior, now composed)
 # =============================================================================
 

@@ -260,7 +260,7 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
                     hint="An internet connection is needed once per model.",
                 ) from exc
             raise TranscriptionError(
-                f"Transcription failed: {_reason_text(exc)}.",
+                f"Couldn't load model '{config.model_name}': {_reason_text(exc)}.",
                 hint="Re-run with -v for details.",
             ) from exc
 
