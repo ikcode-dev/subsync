@@ -32,6 +32,7 @@ from subsync.models import (
     TranscriptionSegment,
     Word,
 )
+from subsync import processor
 from subsync.processor import find_structural_errors, process_transcription
 
 MS = timedelta(milliseconds=1)
@@ -772,6 +773,23 @@ class TestStructuralErrors:
 
         assert len(errors) == 1, errors
         assert fragment in errors[0]
+
+    def test_self_check_failure_reaches_the_report(self, monkeypatch):
+        """A broken processor step shows up in ``report.errors`` (P2).
+
+        Fault injection: the line layout is forced to 3 lines, which the
+        processor normally makes impossible. The report must say so and
+        stop claiming compliance.
+        """
+        monkeypatch.setattr(processor, "_layout", lambda words, config: ["a", "b", "c"])
+        result = transcript(segment("Hello there.", 1.0, 2.2))
+
+        subtitles, report = process_transcription(result)
+
+        assert len(subtitles) == 1
+        assert report.errors == ["Subtitle 1 has 3 lines (expected 1 to 2)"]
+        assert report.is_compliant is False
+        assert report.warnings == []
 
 
 # =============================================================================
