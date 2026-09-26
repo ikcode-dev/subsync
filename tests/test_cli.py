@@ -132,8 +132,8 @@ class TestUnknownModel:
         assert rc == 2
         assert captured.out == ""
         assert "✗ Unknown model 'banana'." in captured.err
-        assert "turbo" in captured.err
-        assert "tiny" in captured.err
+        for name in catalog.MODEL_NAMES:
+            assert name in captured.err
 
 
 # Scenario 6
