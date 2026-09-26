@@ -192,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run_generate(args)
     except SubSyncError as err:
+        if verbose:
+            traceback.print_exc(file=sys.stderr)
         _print_error(err)
         return err.exit_code
     except KeyboardInterrupt:
