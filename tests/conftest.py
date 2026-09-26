@@ -11,7 +11,7 @@ import pytest
 
 @contextmanager
 def isolated_root_logging() -> Iterator[None]:
-    """Restore the root logger's handlers and level on exit.
+    """Restore the root logger's handlers and level, and SubSync's level, on exit.
 
     ``cli.main`` calls ``logging.basicConfig(..., force=True)`` so that ``-v``
     turns on DEBUG logging in the real CLI process. In-process tests share
@@ -20,13 +20,16 @@ def isolated_root_logging() -> Iterator[None]:
     test.
     """
     root = logging.getLogger()
+    package = logging.getLogger("subsync")
     handlers = list(root.handlers)
     level = root.level
+    package_level = package.level
     try:
         yield
     finally:
         root.handlers = handlers
         root.setLevel(level)
+        package.setLevel(package_level)
 
 
 @pytest.fixture(autouse=True)

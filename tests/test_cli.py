@@ -349,8 +349,26 @@ class TestVerboseLoggingIsolation:
         cli.main(["generate", str(video), "-v"])
 
         captured = capsys.readouterr()
-        assert "DEBUG" in captured.err
-        assert logging.getLogger().level == logging.DEBUG
+        assert "DEBUG subsync." in captured.err
+        assert logging.getLogger("subsync").level == logging.DEBUG
+
+    def test_verbose_leaves_library_debug_records_out(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """-v is for SubSync's own records, not its libraries' (numba floods)."""
+
+        def library_chatter(args: object) -> int:
+            logging.getLogger("numba.core.byteflow").debug("bytecode dump")
+            logging.getLogger("subsync.pipeline").debug("stage detail")
+            return 0
+
+        monkeypatch.setattr(cli, "run_generate", library_chatter)
+
+        cli.main(["generate", "x", "-v"])
+
+        captured = capsys.readouterr()
+        assert "stage detail" in captured.err
+        assert "bytecode dump" not in captured.err
 
     def test_isolation_restores_root_handlers_and_level(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -359,16 +377,19 @@ class TestVerboseLoggingIsolation:
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"fake")
         root = logging.getLogger()
+        package = logging.getLogger("subsync")
         handlers_before = list(root.handlers)
         level_before = root.level
+        package_level_before = package.level
 
         with isolated_root_logging():
             cli.main(["generate", str(video), "-v"])
-            assert root.level == logging.DEBUG
+            assert package.level == logging.DEBUG
 
         capsys.readouterr()
         assert root.handlers == handlers_before
         assert root.level == level_before
+        assert package.level == package_level_before
 
     def test_without_verbose_no_debug_records(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]

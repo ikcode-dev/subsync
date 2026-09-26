@@ -402,11 +402,10 @@ def main(argv: list[str] | None = None) -> int:
     verbose = getattr(args, "verbose", False)
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(_SafeFormatter("%(levelname)s %(name)s: %(message)s"))
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.WARNING,
-        handlers=[handler],
-        force=True,
-    )
+    logging.basicConfig(level=logging.WARNING, handlers=[handler], force=True)
+    # -v shows SubSync's own debug records, including the Whisper and FFmpeg
+    # output it captures, but not the thousands from its libraries (numba).
+    logging.getLogger("subsync").setLevel(logging.DEBUG if verbose else logging.NOTSET)
 
     try:
         return args.handler(args)
