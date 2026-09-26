@@ -191,8 +191,8 @@ def _publish_via_reservation(tmp_path: Path, path: Path, mode: int) -> None:
         OSError: The replace failed for another reason.
     """
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
-    os.close(fd)
     try:
+        os.close(fd)
         os.replace(tmp_path, path)
     except BaseException:
         path.unlink(missing_ok=True)

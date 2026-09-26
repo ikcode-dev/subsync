@@ -280,3 +280,27 @@ class TestWriteOutput:
             write_output("content", path, force=False)
 
         assert list(tmp_path.iterdir()) == []
+
+    def test_keyboard_interrupt_during_reservation_close_leaves_no_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # S1.3-Q6: the reservation is created by os.open before the guarded
+        # block; closing its fd must already be inside that block, or an
+        # interrupt right there leaves a stray empty file behind.
+        def link_boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+
+        real_close = os.close
+
+        def close_then_interrupt(fd: int, *args: object, **kwargs: object) -> None:
+            real_close(fd, *args, **kwargs)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(os, "link", link_boom)
+        monkeypatch.setattr(os, "close", close_then_interrupt)
+        path = tmp_path / "ep42.en.srt"
+
+        with pytest.raises(KeyboardInterrupt):
+            write_output("content", path, force=False)
+
+        assert list(tmp_path.iterdir()) == []
