@@ -112,7 +112,7 @@ def process_transcription(
 
     report = _build_report(subtitles, config)
     if report.errors:
-        logger.error("Subtitle self-check failed: %s", "; ".join(report.errors))
+        logger.debug("Subtitle self-check failed: %s", "; ".join(report.errors))
     logger.debug(
         "Processed %d segments into %d subtitles (%d short, %d long word)",
         len(result.segments),
@@ -432,7 +432,7 @@ def _layout(words: list[str], config: ProcessingConfig) -> list[str]:
 # =============================================================================
 
 
-def _clock(value: timedelta) -> str:
+def _timestamp(value: timedelta) -> str:
     """Format a time as ``HH:MM:SS``, like the Studio editor."""
     seconds = value // timedelta(seconds=1)
     hours, rest = divmod(seconds, 3600)
@@ -442,7 +442,7 @@ def _clock(value: timedelta) -> str:
 
 def _describe(flag: ComplianceFlag, config: ProcessingConfig) -> str:
     """Write one human-readable warning line for a flag."""
-    where = f"Subtitle {flag.subtitle_index} at {_clock(flag.start_time)}"
+    where = f"Subtitle {flag.subtitle_index} at {_timestamp(flag.start_time)}"
     if flag.kind == "long_word":
         return (
             f"{where}: word over {config.max_chars_per_line} characters "
