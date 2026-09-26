@@ -519,6 +519,61 @@ class TestTranscribeWithModel:
 
 
 # =============================================================================
+# _DebugLogStream re-entrancy (S1.5-Q6)
+# =============================================================================
+
+
+class _StderrResolvingHandler(logging.Handler):
+    """A logging handler that resolves sys.stderr fresh at emit time.
+
+    Mirrors rich's ``RichHandler`` backed by ``Console(stderr=True)``,
+    which does the same: if sys.stderr is still the redirected debug
+    stream when this handler emits, writing here calls straight back into
+    that stream's ``write()``.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        sys.stderr.write(self.format(record) + "\n")
+
+
+class TestDebugLogStreamReentrancy:
+    """A handler resolving sys.stderr at emit time must not recurse."""
+
+    def test_reentrant_write_from_a_handler_does_not_recurse(self) -> None:
+        """S1.5-Q6: writing back into the redirected stream must not loop.
+
+        Without a re-entrancy guard, logging the forwarded write triggers
+        this handler's emit(), which writes to sys.stderr (still the
+        redirected debug stream), which logs again, recursing through the
+        logging machinery until Python's recursion limit is hit instead of
+        returning a transcription result.
+        """
+        target_logger = logging.getLogger("subsync.transcriber")
+        handler = _StderrResolvingHandler()
+        previous_level = target_logger.level
+        target_logger.addHandler(handler)
+        target_logger.setLevel(logging.DEBUG)
+        try:
+
+            def fake_transcribe(*args: object, **kwargs: object) -> dict:
+                sys.stderr.write("13%|#         | 130M/1.00G [00:05<00:30]\r")
+                return MOCK_WHISPER_RESULT
+
+            engine = MagicMock()
+            engine.transcribe.side_effect = fake_transcribe
+            model = LoadedModel(name="turbo", device="CPU", engine=engine)
+
+            result = transcribe_with_model(
+                model, Path("/fake/audio.wav"), TranscriptionConfig()
+            )
+        finally:
+            target_logger.removeHandler(handler)
+            target_logger.setLevel(previous_level)
+
+        assert isinstance(result, TranscriptionResult)
+
+
+# =============================================================================
 # Exact error wording (S1.5-Q4): F19, F20, F21, and the generic load failure
 # =============================================================================
 

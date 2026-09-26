@@ -14,6 +14,7 @@ import contextlib
 import logging
 import os
 import socket
+import threading
 import warnings
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -100,9 +101,20 @@ class _DebugLogStream:
             target_logger: Logger to forward non-blank writes to.
         """
         self._logger = target_logger
+        self._local = threading.local()
 
     def write(self, text: str) -> int:
         """Log a non-blank write at debug level.
+
+        Guarded against re-entrancy: a debug handler can resolve
+        ``sys.stderr`` fresh at emit time (for example rich's
+        ``RichHandler`` backed by ``Console(stderr=True)``), which, while
+        this stream is in place, writes straight back into this same
+        ``write()`` call. Logging that write would recurse through the
+        logging machinery indefinitely, so a re-entrant write on the same
+        thread is dropped instead of logged or recursed into again --
+        writing it to the real terminal instead would leak exactly the
+        noise this stream exists to suppress.
 
         Args:
             text: Text passed to the stream by the writer.
@@ -110,9 +122,16 @@ class _DebugLogStream:
         Returns:
             The number of characters "written" (all of them).
         """
+        if getattr(self._local, "active", False):
+            return len(text)
+
         stripped = text.strip()
         if stripped:
-            self._logger.debug("whisper: %s", stripped)
+            self._local.active = True
+            try:
+                self._logger.debug("whisper: %s", stripped)
+            finally:
+                self._local.active = False
         return len(text)
 
     def flush(self) -> None:
