@@ -156,18 +156,29 @@ class TestWriteOutput:
 
         assert list(tmp_path.iterdir()) == []
 
+    @pytest.mark.parametrize("umask", [0o077, 0o022, 0o002])
     def test_final_file_mode_matches_a_normally_created_file(
-        self, tmp_path: Path
+        self, tmp_path: Path, umask: int
     ) -> None:
-        path = tmp_path / "ep42.en.srt"
+        # S1.3-Q4: a hard-coded chmod could pass under the ambient umask
+        # alone; check it actually tracks the umask instead.
+        previous_umask = os.umask(umask)
+        try:
+            path = tmp_path / "ep42.en.srt"
+            write_output("content", path, force=False)
 
-        write_output("content", path, force=False)
+            normal = tmp_path / "normal.txt"
+            normal.write_text("x")
 
-        normal = tmp_path / "normal.txt"
-        normal.write_text("x")
-
-        assert stat.S_IMODE(path.stat().st_mode) == stat.S_IMODE(normal.stat().st_mode)
-        assert stat.S_IMODE(path.stat().st_mode) != 0o600
+            assert stat.S_IMODE(path.stat().st_mode) == stat.S_IMODE(
+                normal.stat().st_mode
+            )
+            if umask != 0o077:
+                # Under this umask a normal file legitimately is 0600; the
+                # point of this check only applies where it would not be.
+                assert stat.S_IMODE(path.stat().st_mode) != 0o600
+        finally:
+            os.umask(previous_umask)
 
     def test_target_folder_missing_raises_output_error(self, tmp_path: Path) -> None:
         # S1.3-Q2: mkstemp itself can fail (folder removed after planning,
