@@ -19,12 +19,13 @@ import shutil
 import sys
 import time
 import traceback
+import unicodedata
 from datetime import timedelta
 from importlib import metadata
 from typing import TYPE_CHECKING, TextIO
 
 from subsync import catalog
-from subsync.errors import InputError, SubSyncError
+from subsync.errors import InputError, SubSyncError, reason_text
 from subsync.media import check_ffmpeg
 from subsync.models import ProcessingConfig, TranscriptionConfig
 from subsync.output import check_output_args, plan_output
@@ -172,7 +173,7 @@ def run_generate(args: argparse.Namespace) -> int:
 
     width = shutil.get_terminal_size().columns
     for line in _summary_lines(result, time.monotonic() - started, args.verbose, width):
-        print(line, file=sys.stdout)
+        print(_safe(line), file=sys.stdout)
     return 0
 
 
@@ -270,7 +271,7 @@ def _print_stage(event: "GenerateEvent", stream: TextIO | None = None) -> None:
     """Print one stage event's lines to stderr as soon as it happens."""
     stream = stream or sys.stderr
     for line in _stage_lines(event):
-        print(line, file=stream, flush=True)
+        print(_safe(line), file=stream, flush=True)
 
 
 def _preview(text: str, width: int) -> str:
@@ -339,27 +340,46 @@ def _summary_lines(
     return lines
 
 
-def _summarize(exc: BaseException) -> str:
-    """One-line summary of an unexpected exception, for the F25 message.
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
-    Takes the first non-blank, stripped line of ``str(exc)`` and drops one
-    trailing period (the caller adds its own), so the F25 message never
-    doubles a period or ends up blank. Falls back to the exception's class
-    name when the message has no non-blank line at all.
+
+def _safe(text: str) -> str:
+    """Escape control characters before text reaches the terminal.
+
+    File names and transcribed text are untrusted: an escape sequence in a
+    file name could otherwise retitle the window, hide lines or write the
+    clipboard. Control characters (C0, DEL, C1) and bidirectional overrides
+    are shown as ``\\x1b``-style escapes; everything else, emoji included,
+    is printed as is. The subtitle file itself is never altered (0008).
     """
-    for raw_line in str(exc).splitlines():
-        line = raw_line.strip().removesuffix(".").strip()
-        if line:
-            return line
-    return exc.__class__.__name__
+    return "".join(
+        ch.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(ch) == "Cc" or ch in _BIDI_CONTROLS
+        else ch
+        for ch in text
+    )
+
+
+class _SafeFormatter(logging.Formatter):
+    """A log formatter that escapes control characters, line by line."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the record, then make each of its lines safe to print."""
+        return "\n".join(_safe(line) for line in super().format(record).splitlines())
+
+
+def _print_traceback() -> None:
+    """Print the current exception's traceback to stderr (``-v`` only)."""
+    for line in traceback.format_exc().splitlines():
+        print(_safe(line), file=sys.stderr)
 
 
 def _print_error(err: SubSyncError) -> None:
     """Print the ``✗`` error block to stderr: headline, then each hint line."""
-    print(f"✗ {err}", file=sys.stderr)
+    print(_safe(f"✗ {err}"), file=sys.stderr)
     if err.hint:
         for line in err.hint.splitlines():
-            print(f"  {line}", file=sys.stderr)
+            print(_safe(f"  {line}"), file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -382,10 +402,11 @@ def main(argv: list[str] | None = None) -> int:
         return exc.code if isinstance(exc.code, int) else 0
 
     verbose = getattr(args, "verbose", False)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_SafeFormatter("%(levelname)s %(name)s: %(message)s"))
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.WARNING,
-        stream=sys.stderr,
-        format="%(levelname)s %(name)s: %(message)s",
+        handlers=[handler],
         force=True,
     )
 
@@ -393,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_generate(args)
     except SubSyncError as err:
         if verbose:
-            traceback.print_exc(file=sys.stderr)
+            _print_traceback()
         _print_error(err)
         return err.exit_code
     except KeyboardInterrupt:
@@ -401,10 +422,10 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     except Exception as exc:  # noqa: BLE001 - last-resort boundary (F25)
         if verbose:
-            traceback.print_exc(file=sys.stderr)
+            _print_traceback()
         _print_error(
             SubSyncError(
-                f"Something went wrong: {_summarize(exc)}.",
+                f"Something went wrong: {reason_text(exc)}.",
                 hint="Re-run with -v and share the output.",
             )
         )

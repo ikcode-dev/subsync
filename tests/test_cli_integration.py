@@ -625,3 +625,38 @@ def test_fast_paths_never_import_the_ml_stack(
 
     assert result.stdout.strip() == f"{expected_rc} []", result.stderr
     assert elapsed < 1.0
+
+
+def test_control_characters_in_a_file_name_never_reach_the_terminal(
+    tone: Path,
+    videos: Path,
+    run_tmpdir: Path,
+    stand_in: StandInTranscriber,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A crafted name can't retitle the window or write the clipboard."""
+    crafted = tone.rename(videos / "ep42\x1b]0;PWNED\x07\x1b[2K.mp4")
+
+    rc, out, err = run(["generate", str(crafted)], capsys)
+
+    assert rc == 0, err
+    for stream in (out, err):
+        assert "\x1b" not in stream and "\x07" not in stream
+    assert "ep42\\x1b]0;PWNED\\x07\\x1b[2K.mp4 · 0:03 · local file" in err
+    assert (videos / "ep42\x1b]0;PWNED\x07\x1b[2K.en.srt").exists()
+
+
+@pytest.mark.parametrize("verbose", [False, True], ids=["plain", "-v"])
+def test_control_characters_in_an_error_message_are_escaped(
+    verbose: bool, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    crafted = tmp_path / "clip\x1b]0;PWNED\x07.mov"
+    crafted.write_bytes(b"not media")
+    argv = ["generate", str(crafted)] + (["-v"] if verbose else [])
+
+    rc, out, err = run(argv, capsys)
+
+    assert rc == 2
+    assert out == ""
+    assert "\x1b" not in err and "\x07" not in err
+    assert "✗ Can't read clip\\x1b]0;PWNED\\x07.mov as audio or video." in err
