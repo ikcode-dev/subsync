@@ -8,14 +8,20 @@ Update this list when you add, rename or retire a module.
 
 | Module | Responsibility |
 |---|---|
-| `cli.py` | Entry point `subsync.cli:main` (placeholder until slice S1) |
+| `cli.py` | Entry point `subsync.cli:main`: arguments, stage 0–1 fail-fast checks, stage lines (stderr), summary (stdout), error boundary and exit codes |
+| `catalog.py` | Static Whisper model names and language codes, so `-m`/`-l` validate without importing Whisper (drift-tested) |
+| `sources.py` | Resolves INPUT into a `MediaSource` (local file in S1; a YouTube URL gets the interim message until S4) |
+| `output.py` | Output naming (`-o`), the fail-fast pre-check for existing output, `OutputPlan` |
+| `media.py` | FFmpeg check, media probe (duration, no-audio, unreadable) and 16 kHz mono WAV extraction for local files |
+| `pipeline.py` | `generate()`: one orchestrator from resolved source to written file, reporting stage events ([0007](../../decisions/0007-one-generate-orchestrator-with-mediasource.md)); `process_video()` is the Phase 2 URL pipeline, retired in S4 |
+| `transcriber.py` | Checks the Whisper cache, loads a model and transcribes with word-level timestamps, keeping Whisper's output off the terminal |
+| `processor.py` | Turns a `TranscriptionResult` into compliant `Subtitle`s (timing, splitting, line breaks, long words) and a `ComplianceReport` |
+| `writer.py` | Renders SRT and writes the file in one step, never leaving a partial file |
 | `url_handler.py` | Parses YouTube URLs and extracts the 11-character video ID |
 | `audio_extractor.py` | Reads YouTube video metadata and downloads audio as a 16 kHz mono WAV via yt-dlp |
-| `transcriber.py` | Loads a Whisper model and transcribes audio with word-level timestamps |
-| `pipeline.py` | Orchestrates URL → metadata → audio → transcription and cleans up temp files (`process_video()`, retired in S4 by `generate()`, [0007](../../decisions/0007-one-generate-orchestrator-with-mediasource.md)) |
 | `progress.py` | `ProgressMapper` maps sub-task progress onto overall pipeline progress |
-| `models.py` | Dataclasses for metadata, transcription, subtitles, configs and compliance reports |
-| `errors.py` | Exception hierarchy rooted at `SubSyncError` |
+| `models.py` | Dataclasses for sources, metadata, transcription, subtitles, configs and compliance reports |
+| `errors.py` | Exception hierarchy rooted at `SubSyncError`; each category carries its hint and exit code |
 
 Modules planned for each slice are listed in the [implementation roadmap](../../docs/product-engineering/subsync-v1/implementation-roadmap.md).
 

@@ -13,3 +13,13 @@ Rules for writing and running tests. Project-wide rules are in the [root AGENTS.
 ## Test layers from slice S1
 
 Slice S1 adds the layers agreed in E7: integration tests with real FFmpeg on media generated at test time, an SRT invariant checker written from the requirements (not from the processor), and an opt-in end-to-end run (`pytest -m e2e`) with Whisper `tiny` on a clip made with macOS `say`. The e2e tests are skipped by default and wherever `say` or FFmpeg is missing. Details: [phase 4 plan, Testing Strategy (E7)](../spec/plan/phase-4-cli-output.md#testing-strategy-e7). There is no CI until slice S5 ([0010](../decisions/0010-no-ci-until-s5.md)), so these checks run locally.
+
+Shared test helpers, imported by module name from any test (`pythonpath = ["tests"]`):
+
+| Helper | Use it for |
+|---|---|
+| `srt_invariants.py` | Parsing a written SRT and asserting the file format and timing/layout rules (`assert_valid_srt`) |
+| `media_fixtures.py` | Generating clips with FFmpeg (tone, audio-only, video-only, two tracks, garbage, `say` speech) and the `requires_ffmpeg` / `requires_say` markers |
+| `transcript_fixtures.py` | Loading stored Whisper transcripts from `fixtures/transcripts/` |
+| `transcriber_stand_in.py` | Replacing the Whisper transcriber at its module boundary in integration tests |
+| `conftest.py` | Root-logger isolation for every test, and `run_tmpdir` for detecting leftover temp folders |
