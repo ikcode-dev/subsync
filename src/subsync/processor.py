@@ -232,8 +232,9 @@ def _segment_tokens(segment: TranscriptionSegment) -> list[_Token]:
 def _repair_times(tokens: list[_Token]) -> None:
     """Make token times monotonic, in place, keeping the token order.
 
-    Starts never decrease, a start later than an earlier one wins, and each
-    end lies between its own start and the next token's start.
+    A start earlier than the start before it is raised to match, so starts
+    never decrease. Each end is then moved to lie between its own start and
+    the next token's start.
     """
     floor = 0
     for token in tokens:
