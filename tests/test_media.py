@@ -9,9 +9,11 @@ a few seconds.
 
 import json
 import os
+import re
 import shlex
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -52,6 +54,30 @@ def _ffprobe_json(path: Path) -> dict:
         check=True,
     )
     return json.loads(result.stdout)
+
+
+def _mean_volume_db(path: Path) -> float:
+    """Measure a file's mean audio level in dB (test verification only)."""
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-i",
+            str(path),
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    match = re.search(r"mean_volume: (-?[\d.]+|-inf) dB", result.stderr)
+    assert match, result.stderr
+    return float(match.group(1))
 
 
 @pytest.fixture(scope="module")
@@ -163,14 +189,34 @@ class TestProbeMedia:
         ):
             media.probe_media(media_dir / "garbage.mov")
 
-    def test_ignores_the_file_extension(self, tmp_path: Path) -> None:
-        """Content decides, not the extension: real audio behind a .mov name."""
-        target = tmp_path / "actually-audio.mov"
-        media_fixtures.make_audio_only_clip(target, duration=1.0)
+    @pytest.mark.parametrize(
+        ("filename", "container"),
+        [("wav-inside.mp4", "wav"), ("no-extension", "mp3"), ("UPPER.MOV", "mov")],
+    )
+    def test_content_decides_not_the_extension(
+        self, tmp_path: Path, filename: str, container: str
+    ) -> None:
+        """A WAV named .mp4, an MP3 with no extension, an upper-case .MOV."""
+        target = tmp_path / filename
+        media_fixtures.make_audio_only_clip(target, duration=1.0, container=container)
 
-        duration = media.probe_media(target)
+        assert media.probe_media(target) == pytest.approx(1.0, abs=0.1)
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
+        assert media.extract_audio(target, output_dir).exists()
 
-        assert duration == pytest.approx(1.0, abs=0.1)
+    @pytest.mark.parametrize(
+        ("filename", "container"),
+        [("piped.webm", "webm"), ("piped.mkv", "matroska")],
+    )
+    def test_file_without_duration_metadata(
+        self, tmp_path: Path, filename: str, container: str
+    ) -> None:
+        """A recording written to a pipe has no duration; its packets do."""
+        target = media_fixtures.make_piped_clip(tmp_path / filename, container)
+        assert "duration" not in _ffprobe_json(target)["format"]
+
+        assert media.probe_media(target) == pytest.approx(3.0, abs=0.1)
 
 
 @media_fixtures.requires_ffmpeg
@@ -206,6 +252,8 @@ class TestExtractAudio:
         info = _ffprobe_json(wav_path)
         assert info["streams"][0]["codec_type"] == "audio"
         assert info["streams"][0]["channels"] == 1
+        # The default stream is the first, audible track, not the silent one.
+        assert _mean_volume_db(wav_path) > -60.0
 
     @pytest.mark.parametrize(
         "filename",
@@ -234,6 +282,18 @@ class TestExtractAudio:
         assert captured.out == ""
         assert captured.err == ""
 
+    def test_relative_leading_dash_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A relative `-name` is never parsed as an FFmpeg option."""
+        media_fixtures.make_tone_clip(tmp_path / "-leading.mp4", duration=1.0)
+        monkeypatch.chdir(tmp_path)
+        output_dir = Path("out")
+        output_dir.mkdir()
+
+        assert media.probe_media(Path("-leading.mp4")) == pytest.approx(1.0, abs=0.1)
+        assert media.extract_audio(Path("-leading.mp4"), output_dir).exists()
+
     def test_failure_raises_media_error_with_one_line_reason(
         self, tmp_path: Path
     ) -> None:
@@ -242,8 +302,12 @@ class TestExtractAudio:
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        with pytest.raises(MediaError, match=r"Can't extract audio from garbage\.mov"):
+        with pytest.raises(
+            MediaError, match=r"Can't extract audio from garbage\.mov"
+        ) as exc_info:
             media.extract_audio(target, output_dir)
+
+        assert "\n" not in str(exc_info.value)
 
 
 @media_fixtures.requires_ffmpeg
@@ -266,6 +330,69 @@ class TestTerminalHygiene:
         captured = capfd.readouterr()
         assert captured.out == ""
         assert captured.err == ""
+
+    def test_nothing_reaches_the_terminal_in_a_plain_process(
+        self, media_dir: Path, tmp_path: Path
+    ) -> None:
+        """Without pytest's log capture, FFmpeg's output still stays hidden.
+
+        Python's last-resort handler prints any WARNING or above to stderr, so
+        this fails if FFmpeg's output is logged above DEBUG.
+        """
+        code = (
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from subsync import media\n"
+            "from subsync.errors import MediaError\n"
+            "base, out = Path(sys.argv[1]), Path(sys.argv[2])\n"
+            "media.probe_media(base / 'tone.mp4')\n"
+            "for name in ('silent-video.mp4', 'garbage.mov'):\n"
+            "    try:\n"
+            "        media.probe_media(base / name)\n"
+            "    except MediaError:\n"
+            "        pass\n"
+            "media.extract_audio(base / 'tone.mp4', out)\n"
+            "try:\n"
+            "    media.extract_audio(base / 'garbage.mov', out)\n"
+            "except MediaError:\n"
+            "    pass\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(media_dir), str(tmp_path)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert (result.stdout, result.stderr) == ("", "")
+
+    def test_ffmpeg_never_reads_the_terminal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Keystrokes waiting on SubSync's stdin never reach FFmpeg."""
+        marker = tmp_path / "stdin-seen.txt"
+        fake_bin = tmp_path / "fakebin"
+        fake_bin.mkdir()
+        fake_ffmpeg = fake_bin / "ffmpeg"
+        fake_ffmpeg.write_text(f"#!/bin/bash\ncat > {shlex.quote(str(marker))}\n")
+        fake_ffmpeg.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+
+        read_end, write_end = os.pipe()
+        os.write(write_end, b"q\n")
+        os.close(write_end)
+        saved_stdin = os.dup(0)
+        os.dup2(read_end, 0)
+        try:
+            with pytest.raises(MediaError):
+                media.extract_audio(tmp_path / "input.mp4", tmp_path)
+        finally:
+            os.dup2(saved_stdin, 0)
+            os.close(saved_stdin)
+            os.close(read_end)
+
+        assert marker.read_bytes() == b""
 
 
 @media_fixtures.requires_ffmpeg
@@ -306,3 +433,13 @@ class TestCancellation:
             time.sleep(0.05)
 
         assert not _pid_alive(pid), "fake ffmpeg child was not killed within 2 s"
+
+
+@media_fixtures.requires_ffmpeg
+@media_fixtures.requires_say
+def test_speech_clip_helper_makes_a_readable_clip(tmp_path: Path) -> None:
+    """`make_speech_clip` (used by the e2e suite) produces a probeable clip."""
+    clip = media_fixtures.make_speech_clip(tmp_path / "talk.mp4", ["Hello there."])
+
+    assert media.probe_media(clip) > 0.3
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["talk.mp4"]

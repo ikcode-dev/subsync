@@ -98,6 +98,10 @@ def probe_media(path: Path) -> float:
     if duration is None:
         duration = _parse_duration(audio_streams[0].get("duration"))
     if duration is None:
+        # Files written to a pipe or never finalized (e.g. browser WebM
+        # recordings) carry no duration anywhere; the last audio packet does.
+        duration = _last_audio_packet_end(resolved)
+    if duration is None:
         raise MediaError(f"Can't read {name} as audio or video.")
 
     return duration
@@ -150,6 +154,40 @@ def extract_audio(path: Path, output_dir: Path) -> Path:
         raise MediaError(f"Can't extract audio from {name}: {reason}.")
 
     return output_path
+
+
+def _last_audio_packet_end(resolved: Path) -> float | None:
+    """Read where the first audio stream's last packet ends (demux only).
+
+    Returns:
+        The end time in seconds, or ``None`` if no packet has a timestamp.
+    """
+    result = _run(
+        [
+            _FFPROBE,
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "packet=pts_time,duration_time",
+            "-of",
+            "csv=p=0",
+            str(resolved),
+        ]
+    )
+    _log_stderr(_FFPROBE, result.stderr)
+    if result.returncode != 0:
+        return None
+    lines = result.stdout.decode("utf-8", errors="replace").splitlines()
+    for line in reversed(lines):
+        fields = [field for field in line.split(",") if field]
+        pts = _parse_duration(fields[0]) if fields else None
+        if pts is None:
+            continue
+        length = _parse_duration(fields[1]) if len(fields) > 1 else None
+        return pts + (length or 0.0)
+    return None
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:

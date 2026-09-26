@@ -12,7 +12,7 @@ Skip markers:
 """
 
 import logging
-import os
+import random
 import shutil
 import subprocess
 from pathlib import Path
@@ -82,25 +82,81 @@ def make_tone_clip(path: Path, duration: float = DEFAULT_DURATION) -> Path:
     return path
 
 
-def make_audio_only_clip(path: Path, duration: float = DEFAULT_DURATION) -> Path:
+def make_audio_only_clip(
+    path: Path, duration: float = DEFAULT_DURATION, container: str | None = None
+) -> Path:
     """Render a sine-wave tone with no video track.
 
     Args:
         path: Destination file path, e.g. ``audio.wav`` or ``audio.mp3``.
         duration: Clip length in seconds.
+        container: FFmpeg muxer to force (e.g. ``"wav"``), so the content can
+            differ from what the file's extension suggests. By default the
+            muxer follows the extension.
 
     Returns:
         ``path``, once written.
     """
+    muxer = ["-f", container] if container else []
     _ffmpeg(
         [
             "-f",
             "lavfi",
             "-i",
             f"sine=frequency=440:duration={duration}",
+            *muxer,
             str(path),
         ]
     )
+    return path
+
+
+def make_piped_clip(
+    path: Path, container: str = "webm", duration: float = DEFAULT_DURATION
+) -> Path:
+    """Render a tone through a pipe, so the file carries no duration metadata.
+
+    Like a browser's MediaRecorder WebM or an unfinalized MKV: neither the
+    container nor the stream reports a duration.
+
+    Args:
+        path: Destination file path, e.g. ``piped.webm``.
+        container: ``"webm"`` (Opus audio) or ``"matroska"`` (AAC audio and
+            an MPEG-4 video track).
+        duration: Clip length in seconds.
+
+    Returns:
+        ``path``, once written.
+    """
+    if container == "webm":
+        args = ["-f", "lavfi", "-i", f"sine=d={duration}", "-c:a", "libopus"]
+    else:
+        args = [
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=d={duration}",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=red:s=64x64:d={duration}",
+            "-c:a",
+            "aac",
+            "-c:v",
+            "mpeg4",
+        ]
+    with path.open("wb") as handle:
+        result = subprocess.run(
+            ["ffmpeg", "-nostdin", "-v", "error", *args, "-f", container, "-"],
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=subprocess.PIPE,
+            text=False,
+        )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"fixture generation failed (ffmpeg): {result.stderr.decode().strip()}"
+        )
     return path
 
 
@@ -129,21 +185,28 @@ def make_video_only_clip(path: Path, duration: float = DEFAULT_DURATION) -> Path
 def make_multi_track_clip(
     path: Path, duration: float = DEFAULT_DURATION, track_count: int = 2
 ) -> Path:
-    """Render several sine-wave tones as separate audio tracks, no video.
+    """Render several mono audio tracks, no video: a tone, then silence.
+
+    The first track is a 440 Hz tone and every other track is silent, so a
+    test can tell which track was extracted. All tracks are mono, so FFmpeg's
+    default stream selection picks the first one.
 
     Args:
         path: Destination file path, e.g. ``multitrack.mkv``.
         duration: Clip length in seconds.
-        track_count: Number of distinct audio tracks to mux (each at a
-            different frequency, so they are distinguishable).
+        track_count: Number of audio tracks to mux.
 
     Returns:
         ``path``, once written.
     """
-    args: list[str] = []
-    for i in range(track_count):
-        frequency = 440 * (i + 1)
-        args += ["-f", "lavfi", "-i", f"sine=frequency={frequency}:duration={duration}"]
+    args: list[str] = ["-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}"]
+    for _ in range(track_count - 1):
+        args += [
+            "-f",
+            "lavfi",
+            "-i",
+            f"anullsrc=channel_layout=mono:sample_rate=44100:duration={duration}",
+        ]
     for i in range(track_count):
         args += ["-map", f"{i}:a"]
     args.append(str(path))
@@ -152,16 +215,20 @@ def make_multi_track_clip(
 
 
 def make_garbage_file(path: Path, size: int = 256) -> Path:
-    """Write random, non-media bytes to ``path``.
+    """Write fixed pseudo-random, non-media bytes to ``path``.
+
+    The bytes come from a seeded generator, so every run gets the same
+    content: truly random bytes are occasionally detected by ffprobe as a
+    text format (for example lyrics files starting with ``[``).
 
     Args:
         path: Destination file path, e.g. ``garbage.mov``.
-        size: Number of random bytes to write.
+        size: Number of bytes to write.
 
     Returns:
         ``path``, once written.
     """
-    path.write_bytes(os.urandom(size))
+    path.write_bytes(random.Random(0).randbytes(size))
     return path
 
 
