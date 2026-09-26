@@ -265,18 +265,20 @@ def is_model_cached(model_name: str) -> bool:
         cache directory.
 
     Note:
-        This only checks that a file exists at the expected path; it
-        cannot detect a partial download left behind by an interrupted
-        first download, since Whisper streams straight into the target
-        file rather than a temp name. A subsequent load may still find
-        such a file, treat it as cached, and re-download after a checksum
-        mismatch; ``load_model`` classifies that failure as a download
-        error regardless of what this function reported.
+        This only checks that a file exists at the expected path. Whisper
+        streams a download straight into that path, so ``load_model``
+        removes the file again when a first download fails or is cancelled;
+        a file left by other means is re-downloaded by Whisper after a
+        checksum mismatch, which ``load_model`` reports as a download error.
     """
+    path = _model_cache_path(model_name)
+    return path is not None and path.is_file()
+
+
+def _model_cache_path(model_name: str) -> Path | None:
+    """Where Whisper keeps ``model_name``'s weights, or None if not a catalog name."""
     filename = _MODEL_CACHE_FILENAMES.get(model_name)
-    if filename is None:
-        return False
-    return (_whisper_cache_dir() / filename).is_file()
+    return None if filename is None else _whisper_cache_dir() / filename
 
 
 def load_model(config: TranscriptionConfig) -> LoadedModel:
@@ -306,7 +308,12 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
 
     with _quiet_whisper_output():
         try:
-            engine = whisper.load_model(config.model_name, device=device)
+            try:
+                engine = whisper.load_model(config.model_name, device=device)
+            except BaseException:
+                if not cached:
+                    _discard_partial_download(config.model_name)
+                raise
         except Exception as exc:
             if _is_out_of_memory(exc):
                 raise _out_of_memory(config.model_name) from exc
@@ -322,6 +329,21 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
             ) from exc
 
     return LoadedModel(name=config.model_name, device=device.upper(), engine=engine)
+
+
+def _discard_partial_download(model_name: str) -> None:
+    """Remove the weight file a failed or cancelled first download left.
+
+    Whisper writes the download straight to the cache path, so without this
+    an interrupted first run would leave a partial file that the next run
+    takes for a cached model, skipping the one-time download notice (R7).
+    Only called when the file did not exist before this load.
+    """
+    path = _model_cache_path(model_name)
+    if path is not None:
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+            logger.debug("Removed partial model download %s", path)
 
 
 def _map_segments(raw_segments: list[dict]) -> list[TranscriptionSegment]:

@@ -187,6 +187,59 @@ def test_is_model_cached_matches_real_whisper_urls(
 class TestLoadModel:
     """Tests for load_model()."""
 
+    @pytest.mark.parametrize(
+        "failure",
+        [KeyboardInterrupt(), URLError("connection reset")],
+        ids=["ctrl-c", "network"],
+    )
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_failed_first_download_leaves_no_partial_file(
+        self,
+        mock_device: MagicMock,
+        mock_whisper: MagicMock,
+        failure: BaseException,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A cancelled or failed first download doesn't look cached next time."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        weights = tmp_path / "whisper" / "tiny.pt"
+
+        def download_then_fail(name: str, device: str) -> None:
+            weights.parent.mkdir(exist_ok=True)
+            weights.write_bytes(b"partial")
+            raise failure
+
+        mock_whisper.load_model.side_effect = download_then_fail
+
+        with pytest.raises((KeyboardInterrupt, ModelDownloadError)):
+            load_model(TranscriptionConfig(model_name="tiny"))
+
+        assert not weights.exists()
+        assert is_model_cached("tiny") is False
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_interrupted_load_of_a_cached_model_keeps_it(
+        self,
+        mock_device: MagicMock,
+        mock_whisper: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Ctrl+C while loading an already cached model never deletes it."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        weights = tmp_path / "whisper" / "tiny.pt"
+        weights.parent.mkdir()
+        weights.write_bytes(b"complete")
+        mock_whisper.load_model.side_effect = KeyboardInterrupt()
+
+        with pytest.raises(KeyboardInterrupt):
+            load_model(TranscriptionConfig(model_name="tiny"))
+
+        assert weights.read_bytes() == b"complete"
+
     @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber.is_model_cached", return_value=False)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
