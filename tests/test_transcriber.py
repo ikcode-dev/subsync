@@ -1,13 +1,24 @@
 """Tests for the transcriber module."""
 
+import logging
+import sys
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.error import URLError
 
 import pytest
 
-from subsync.errors import TranscriptionError
+from subsync.errors import ModelDownloadError, ModelMemoryError, TranscriptionError
 from subsync.models import TranscriptionConfig, TranscriptionResult
-from subsync.transcriber import _resolve_device, transcribe_audio
+from subsync.transcriber import (
+    LoadedModel,
+    _resolve_device,
+    is_model_cached,
+    load_model,
+    transcribe_audio,
+    transcribe_with_model,
+)
 
 # A mock whisper result dict used across multiple tests
 MOCK_WHISPER_RESULT = {
@@ -73,7 +84,256 @@ class TestResolveDevice:
 
 
 # =============================================================================
-# transcribe_audio tests
+# is_model_cached tests (Scenario 1)
+# =============================================================================
+
+
+class TestIsModelCached:
+    """Tests for is_model_cached()."""
+
+    def test_cached_when_weight_file_present(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """XDG_CACHE_HOME set, weight file present → True."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        cache_dir = tmp_path / "whisper"
+        cache_dir.mkdir()
+        (cache_dir / "large-v3-turbo.pt").touch()
+
+        assert is_model_cached("turbo") is True
+
+    def test_not_cached_when_weight_file_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """XDG_CACHE_HOME set, weight file absent → False."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+        assert is_model_cached("turbo") is False
+
+    def test_falls_back_to_home_cache_without_xdg(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without XDG_CACHE_HOME, ~/.cache/whisper is used."""
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        cache_dir = tmp_path / ".cache" / "whisper"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "large-v3-turbo.pt").touch()
+
+        assert is_model_cached("turbo") is True
+
+    def test_unknown_model_name_is_never_cached(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A name outside the known catalog (e.g. a checkpoint path) → False."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+        assert is_model_cached("/some/local/checkpoint.pt") is False
+
+    @patch("subsync.transcriber.whisper")
+    def test_unaffected_by_a_mocked_whisper_module(
+        self,
+        mock_whisper: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """is_model_cached does not rely on the (possibly mocked) whisper module."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        cache_dir = tmp_path / "whisper"
+        cache_dir.mkdir()
+        (cache_dir / "small.pt").touch()
+
+        assert is_model_cached("small") is True
+        mock_whisper.assert_not_called()
+
+
+# =============================================================================
+# load_model tests (Scenarios 2, 3, 4, 8)
+# =============================================================================
+
+
+class TestLoadModel:
+    """Tests for load_model()."""
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_not_cached_download_failure_raises_model_download_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """Scenario 2: not cached, loader raises URLError → ModelDownloadError."""
+        mock_whisper.load_model.side_effect = URLError("no network")
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            load_model(config)
+
+        assert "Couldn't download model 'turbo'" in str(exc_info.value)
+        assert exc_info.value.hint == "An internet connection is needed once per model."
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_cached_generic_failure_is_not_a_download_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """Scenario 3: cached, loader raises RuntimeError('boom') → TranscriptionError."""
+        mock_whisper.load_model.side_effect = RuntimeError("boom")
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            load_model(config)
+
+        assert not isinstance(exc_info.value, ModelDownloadError)
+        assert not isinstance(exc_info.value, ModelMemoryError)
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_runtime_out_of_memory_raises_model_memory_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """Scenario 4: 'CUDA out of memory' RuntimeError → ModelMemoryError."""
+        mock_whisper.load_model.side_effect = RuntimeError(
+            "CUDA out of memory. Tried to allocate 2.00 GiB"
+        )
+        config = TranscriptionConfig(model_name="large-v3")
+
+        with pytest.raises(ModelMemoryError) as exc_info:
+            load_model(config)
+
+        assert "large-v3" in str(exc_info.value)
+        assert exc_info.value.hint == "Try a smaller one: -m small"
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_memory_error_raises_model_memory_error_even_when_not_cached(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """Scenario 4: bare MemoryError → ModelMemoryError, not a download error."""
+        mock_whisper.load_model.side_effect = MemoryError()
+        config = TranscriptionConfig(model_name="large-v3")
+
+        with pytest.raises(ModelMemoryError) as exc_info:
+            load_model(config)
+
+        assert "large-v3" in str(exc_info.value)
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_loaded_model_cpu_device_label(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """Scenario 8: LoadedModel for CPU has the uppercase device label."""
+        mock_engine = MagicMock()
+        mock_whisper.load_model.return_value = mock_engine
+        config = TranscriptionConfig(model_name="turbo")
+
+        loaded = load_model(config)
+
+        assert isinstance(loaded, LoadedModel)
+        assert loaded.device == "CPU"
+        assert loaded.name == "turbo"
+        assert loaded.engine is mock_engine
+
+
+# =============================================================================
+# transcribe_with_model tests (Scenarios 5, 6, 7)
+# =============================================================================
+
+
+class TestTranscribeWithModel:
+    """Tests for transcribe_with_model()."""
+
+    def _loaded_model(self, engine: MagicMock) -> LoadedModel:
+        return LoadedModel(name="turbo", device="CPU", engine=engine)
+
+    def test_out_of_memory_raises_model_memory_error(self) -> None:
+        """Scenario 5: transcribe raises an 'out of memory' error → ModelMemoryError."""
+        engine = MagicMock()
+        engine.transcribe.side_effect = RuntimeError(
+            "CUDA out of memory. Tried to allocate 1.00 GiB"
+        )
+        model = self._loaded_model(engine)
+
+        with pytest.raises(ModelMemoryError) as exc_info:
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        assert "turbo" in str(exc_info.value)
+        assert exc_info.value.hint == "Try a smaller one: -m small"
+
+    def test_other_failure_raises_transcription_error(self) -> None:
+        """A non-memory transcribe failure raises TranscriptionError with the hint."""
+        engine = MagicMock()
+        engine.transcribe.side_effect = RuntimeError("boom")
+        model = self._loaded_model(engine)
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        assert not isinstance(exc_info.value, ModelMemoryError)
+        assert exc_info.value.hint == "Re-run with -v for details."
+
+    def test_keyboard_interrupt_propagates(self) -> None:
+        """Scenario 6: KeyboardInterrupt during transcribe is never caught."""
+        engine = MagicMock()
+        engine.transcribe.side_effect = KeyboardInterrupt()
+        model = self._loaded_model(engine)
+
+        with pytest.raises(KeyboardInterrupt):
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+    def test_download_bar_and_warnings_are_quiet(
+        self, capfd: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Scenario 7: Whisper's stderr bar and warnings go to debug logging."""
+
+        def fake_transcribe(*args: object, **kwargs: object) -> dict:
+            sys.stderr.write("50%|#####     | 5/10 [00:01<00:01]\r")
+            warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+            return MOCK_WHISPER_RESULT
+
+        engine = MagicMock()
+        engine.transcribe.side_effect = fake_transcribe
+        model = self._loaded_model(engine)
+
+        with caplog.at_level(logging.DEBUG, logger="subsync.transcriber"):
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        captured = capfd.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+        assert any(record.levelno == logging.DEBUG for record in caplog.records)
+
+    def test_warnings_behave_normally_outside_the_scope(self) -> None:
+        """Suppression is scoped: a warning issued outside still surfaces normally."""
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            warnings.warn("unrelated warning", UserWarning)
+
+        assert len(recorded) == 1
+        assert "unrelated warning" in str(recorded[0].message)
+
+
+# =============================================================================
+# transcribe_audio tests (Scenario 9 — unchanged behavior, now composed)
 # =============================================================================
 
 
@@ -162,22 +422,28 @@ class TestTranscribeAudio:
         assert result.segments[0].words == []
 
     @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
-    def test_model_load_failure(
-        self, mock_device: MagicMock, mock_whisper: MagicMock
+    def test_model_load_failure_propagates_as_transcription_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
     ) -> None:
-        """Whisper model load failure raises TranscriptionError."""
+        """A cached model's load failure surfaces as TranscriptionError."""
         mock_whisper.load_model.side_effect = RuntimeError("Model not found")
 
-        with pytest.raises(TranscriptionError, match="Failed to load Whisper model"):
+        with pytest.raises(TranscriptionError) as exc_info:
             transcribe_audio(Path("/fake/audio.wav"))
+
+        assert not isinstance(exc_info.value, ModelDownloadError)
 
     @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
-    def test_transcribe_failure(
+    def test_transcribe_failure_propagates_as_transcription_error(
         self, mock_device: MagicMock, mock_whisper: MagicMock
     ) -> None:
-        """Whisper transcription failure raises TranscriptionError."""
+        """A transcription failure surfaces as TranscriptionError."""
         mock_model = MagicMock()
         mock_model.transcribe.side_effect = RuntimeError("Transcription failed")
         mock_whisper.load_model.return_value = mock_model
@@ -207,14 +473,14 @@ class TestTranscribeAudio:
     def test_gpu_out_of_memory(
         self, mock_device: MagicMock, mock_whisper: MagicMock
     ) -> None:
-        """CUDA OOM raises TranscriptionError with actionable message."""
+        """CUDA OOM during transcription raises ModelMemoryError."""
         mock_model = MagicMock()
         mock_model.transcribe.side_effect = RuntimeError(
             "CUDA out of memory. Tried to allocate 2.00 GiB"
         )
         mock_whisper.load_model.return_value = mock_model
 
-        with pytest.raises(TranscriptionError, match="GPU out of memory"):
+        with pytest.raises(ModelMemoryError):
             transcribe_audio(Path("/fake/audio.wav"))
 
     @patch("subsync.transcriber.whisper")

@@ -2,15 +2,26 @@
 
 This module loads a Whisper model and transcribes audio files,
 returning word-level timestamps for subtitle generation.
+
+Loading and transcribing are separate steps (``is_model_cached``,
+``load_model``, ``transcribe_with_model``) so a caller can show a one-time
+download notice and distinct stage lines. ``transcribe_audio`` remains as a
+convenience wrapper composed of the two, used until ``process_video()`` is
+retired.
 """
 
+import contextlib
 import logging
-from collections.abc import Callable
+import os
+import warnings
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import whisper
 
-from subsync.errors import TranscriptionError
+from subsync.errors import ModelDownloadError, ModelMemoryError, TranscriptionError
 from subsync.models import (
     TranscriptionConfig,
     TranscriptionResult,
@@ -19,6 +30,117 @@ from subsync.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Whisper caches weights under the basename of each model's download URL
+# (see ``whisper._MODELS`` in openai-whisper 20250625). This mapping is kept
+# local rather than read off the ``whisper`` module so that ``is_model_cached``
+# behaves correctly even when ``whisper`` is replaced with a stand-in, and so
+# it never needs the network or a heavy import to answer a cache question.
+_MODEL_CACHE_FILENAMES: dict[str, str] = {
+    "tiny.en": "tiny.en.pt",
+    "tiny": "tiny.pt",
+    "base.en": "base.en.pt",
+    "base": "base.pt",
+    "small.en": "small.en.pt",
+    "small": "small.pt",
+    "medium.en": "medium.en.pt",
+    "medium": "medium.pt",
+    "large-v1": "large-v1.pt",
+    "large-v2": "large-v2.pt",
+    "large-v3": "large-v3.pt",
+    "large": "large-v3.pt",
+    "large-v3-turbo": "large-v3-turbo.pt",
+    "turbo": "large-v3-turbo.pt",
+}
+
+
+@dataclass
+class LoadedModel:
+    """A Whisper model ready to transcribe.
+
+    Attributes:
+        name: The requested model name (e.g. "turbo").
+        device: Uppercase device label for display ("CPU" or "CUDA").
+        engine: The underlying Whisper model instance.
+    """
+
+    name: str
+    device: str
+    engine: Any
+
+
+class _DebugLogStream:
+    """Write-only stream that forwards writes to a logger at debug level.
+
+    Used to redirect Whisper's tqdm download bar (which writes straight to
+    ``sys.stderr``) into ``logging`` instead of the terminal.
+    """
+
+    def __init__(self, target_logger: logging.Logger) -> None:
+        """Create the stream.
+
+        Args:
+            target_logger: Logger to forward non-blank writes to.
+        """
+        self._logger = target_logger
+
+    def write(self, text: str) -> int:
+        """Log a non-blank write at debug level.
+
+        Args:
+            text: Text passed to the stream by the writer.
+
+        Returns:
+            The number of characters "written" (all of them).
+        """
+        stripped = text.strip()
+        if stripped:
+            self._logger.debug("whisper: %s", stripped)
+        return len(text)
+
+    def flush(self) -> None:
+        """No-op; nothing is buffered."""
+        return None
+
+    def isatty(self) -> bool:
+        """Report as a non-interactive stream."""
+        return False
+
+
+@contextlib.contextmanager
+def _quiet_whisper_output() -> Iterator[None]:
+    """Suppress Whisper's stderr progress bar and warnings for one call.
+
+    Whisper's download bar is redirected to debug logging and its
+    ``warnings.warn`` calls (e.g. "FP16 is not supported on CPU") are
+    captured and logged at debug level instead of being printed. Both are
+    restored to normal behavior as soon as the wrapped call returns, so the
+    rest of the process is unaffected.
+    """
+    stream = _DebugLogStream(logger)
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        with contextlib.redirect_stderr(stream):
+            try:
+                yield
+            finally:
+                for warning in captured:
+                    logger.debug("%s: %s", warning.category.__name__, warning.message)
+
+
+def _is_out_of_memory(exc: Exception) -> bool:
+    """Check whether an exception indicates the process ran out of memory.
+
+    Args:
+        exc: The exception raised by Whisper or torch.
+
+    Returns:
+        True for a ``MemoryError``, or a ``RuntimeError`` mentioning "out of
+        memory" (this covers torch's CUDA OOM errors).
+    """
+    if isinstance(exc, MemoryError):
+        return True
+    return isinstance(exc, RuntimeError) and "out of memory" in str(exc).lower()
 
 
 def _resolve_device(device: str) -> str:
@@ -43,6 +165,83 @@ def _resolve_device(device: str) -> str:
         return "cpu"
 
     return device
+
+
+def _whisper_cache_dir() -> Path:
+    """Return Whisper's weight cache directory.
+
+    Mirrors Whisper's own default: ``$XDG_CACHE_HOME/whisper`` when set,
+    else ``~/.cache/whisper``.
+
+    Returns:
+        Path to the directory Whisper downloads model weights into.
+    """
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "whisper"
+
+
+def is_model_cached(model_name: str) -> bool:
+    """Check whether a Whisper model's weights are already on disk.
+
+    Args:
+        model_name: Whisper model name (e.g. "turbo", "small").
+
+    Returns:
+        True if the cached weight file exists. False if it does not, or if
+        ``model_name`` is not one of the known catalog names (such as a
+        local checkpoint path), since that is never cached under Whisper's
+        cache directory.
+    """
+    filename = _MODEL_CACHE_FILENAMES.get(model_name)
+    if filename is None:
+        return False
+    return (_whisper_cache_dir() / filename).is_file()
+
+
+def load_model(config: TranscriptionConfig) -> LoadedModel:
+    """Load a Whisper model, ready to transcribe.
+
+    Args:
+        config: Transcription configuration naming the model and device.
+
+    Returns:
+        The loaded model, its resolved device label, and the engine handle.
+
+    Raises:
+        ModelDownloadError: The model is not cached and downloading it
+            failed (network, HTTP, or checksum).
+        ModelMemoryError: Loading the model ran out of memory.
+        TranscriptionError: Any other load failure.
+    """
+    device = _resolve_device(config.device)
+    cached = is_model_cached(config.model_name)
+    logger.debug(
+        "Loading Whisper model=%s, device=%s, cached=%s",
+        config.model_name,
+        device,
+        cached,
+    )
+
+    with _quiet_whisper_output():
+        try:
+            engine = whisper.load_model(config.model_name, device=device)
+        except Exception as exc:
+            if _is_out_of_memory(exc):
+                raise ModelMemoryError(
+                    f"Ran out of memory with model '{config.model_name}'.",
+                    hint="Try a smaller one: -m small",
+                ) from exc
+            if not cached:
+                raise ModelDownloadError(
+                    f"Couldn't download model '{config.model_name}': {exc}.",
+                    hint="An internet connection is needed once per model.",
+                ) from exc
+            raise TranscriptionError(
+                f"Transcription failed: {exc}.",
+                hint="Re-run with -v for details.",
+            ) from exc
+
+    return LoadedModel(name=config.model_name, device=device.upper(), engine=engine)
 
 
 def _map_segments(raw_segments: list[dict]) -> list[TranscriptionSegment]:
@@ -80,75 +279,59 @@ def _map_segments(raw_segments: list[dict]) -> list[TranscriptionSegment]:
     return segments
 
 
-def transcribe_audio(
+def transcribe_with_model(
+    model: LoadedModel,
     audio_path: Path,
-    config: TranscriptionConfig | None = None,
+    config: TranscriptionConfig,
     progress_callback: Callable[[float], None] | None = None,
 ) -> TranscriptionResult:
-    """Transcribe an audio file using OpenAI Whisper.
+    """Transcribe an audio file with an already-loaded Whisper model.
 
     Args:
+        model: A model returned by ``load_model()``.
         audio_path: Path to the audio file (WAV preferred).
-        config: Transcription configuration. Uses defaults if None.
-        progress_callback: Optional callback receiving progress as 0.0–1.0.
+        config: Transcription configuration (language, word timestamps).
+        progress_callback: Optional callback receiving progress as 0.0-1.0.
 
     Returns:
         TranscriptionResult with segments and word-level timestamps.
 
     Raises:
-        TranscriptionError: If model loading or transcription fails.
+        ModelMemoryError: Transcription ran out of memory.
+        TranscriptionError: Any other transcription failure.
     """
-    if config is None:
-        config = TranscriptionConfig()
-
-    device = _resolve_device(config.device)
     logger.debug(
         "Transcribing %s with model=%s, device=%s, language=%s",
         audio_path,
-        config.model_name,
-        device,
+        model.name,
+        model.device,
         config.language,
     )
 
-    # Load model
-    try:
-        model = whisper.load_model(config.model_name, device=device)
-    except Exception as exc:
-        raise TranscriptionError(
-            f"Failed to load Whisper model '{config.model_name}': {exc}"
-        ) from exc
-
-    # Signal start of transcription
     if progress_callback is not None:
         progress_callback(0.0)
 
-    # Transcribe
-    try:
-        result = model.transcribe(
-            str(audio_path),
-            language=config.language,
-            word_timestamps=config.word_timestamps,
-        )
-    except RuntimeError as exc:
-        error_msg = str(exc)
-        if "out of memory" in error_msg.lower() or "CUDA" in error_msg:
-            logger.warning(
-                "GPU out of memory during transcription. "
-                "Consider using a smaller model (e.g., 'base' or 'small') "
-                "or setting device='cpu'."
+    with _quiet_whisper_output():
+        try:
+            result = model.engine.transcribe(
+                str(audio_path),
+                language=config.language,
+                word_timestamps=config.word_timestamps,
             )
+        except Exception as exc:
+            if _is_out_of_memory(exc):
+                raise ModelMemoryError(
+                    f"Ran out of memory with model '{model.name}'.",
+                    hint="Try a smaller one: -m small",
+                ) from exc
             raise TranscriptionError(
-                f"GPU out of memory: {exc}. Try a smaller model or use device='cpu'."
+                f"Transcription failed: {exc}.",
+                hint="Re-run with -v for details.",
             ) from exc
-        raise TranscriptionError(f"Transcription failed: {exc}") from exc
-    except Exception as exc:
-        raise TranscriptionError(f"Transcription failed: {exc}") from exc
 
-    # Signal completion
     if progress_callback is not None:
         progress_callback(1.0)
 
-    # Map results
     raw_segments = result.get("segments", [])
     segments = _map_segments(raw_segments)
 
@@ -172,3 +355,37 @@ def transcribe_audio(
         len(transcription.segments),
     )
     return transcription
+
+
+def transcribe_audio(
+    audio_path: Path,
+    config: TranscriptionConfig | None = None,
+    progress_callback: Callable[[float], None] | None = None,
+) -> TranscriptionResult:
+    """Transcribe an audio file using OpenAI Whisper.
+
+    Convenience wrapper composed of ``load_model`` and
+    ``transcribe_with_model``; kept for ``process_video()`` until it is
+    retired.
+
+    Args:
+        audio_path: Path to the audio file (WAV preferred).
+        config: Transcription configuration. Uses defaults if None.
+        progress_callback: Optional callback receiving progress as 0.0-1.0.
+
+    Returns:
+        TranscriptionResult with segments and word-level timestamps.
+
+    Raises:
+        ModelDownloadError: The model is not cached and downloading it
+            failed.
+        ModelMemoryError: Loading or transcribing ran out of memory.
+        TranscriptionError: Any other load or transcription failure.
+    """
+    if config is None:
+        config = TranscriptionConfig()
+
+    model = load_model(config)
+    return transcribe_with_model(
+        model, audio_path, config, progress_callback=progress_callback
+    )
