@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 _MILLISECOND = timedelta(milliseconds=1)
 _EXISTS_HINT = "Re-run with --force to replace it, or choose another path with -o."
 
+# Short and fixed-length on purpose: unlike a prefix built from the final
+# name, this never pushes a legal final name (up to 255 bytes) over a
+# filesystem's name-length limit.
+_TEMP_PREFIX = ".subsync-"
+_TEMP_SUFFIX = ".tmp"
+
 
 def _format_timestamp(moment: timedelta) -> str:
     """Format a timestamp as ``HH:MM:SS,mmm`` (hours zero-padded to 2+ digits).
@@ -101,7 +107,7 @@ def write_output(content: str, path: Path, force: bool) -> None:
     tmp_path: Path | None = None
     try:
         fd, tmp_name = tempfile.mkstemp(
-            dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+            dir=path.parent, prefix=_TEMP_PREFIX, suffix=_TEMP_SUFFIX
         )
         tmp_path = Path(tmp_name)
         with os.fdopen(fd, "wb") as handle:

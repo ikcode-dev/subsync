@@ -197,3 +197,14 @@ class TestWriteOutput:
         assert not isinstance(exc_info.value, OutputExistsError)
         assert "No space left on device" in str(exc_info.value)
         assert list(tmp_path.iterdir()) == []
+
+    def test_long_final_name_is_written(self, tmp_path: Path) -> None:
+        # S1.3-Q3: the temp name must not grow with the final name's length,
+        # or a legal final name near the 255-byte limit can't be written.
+        name = "a" * 243 + ".srt"
+        assert len(name.encode("utf-8")) == 247
+        path = tmp_path / name
+
+        write_output("content", path, force=False)
+
+        assert path.read_text(encoding="utf-8") == "content"
