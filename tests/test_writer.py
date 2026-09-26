@@ -208,3 +208,40 @@ class TestWriteOutput:
         write_output("content", path, force=False)
 
         assert path.read_text(encoding="utf-8") == "content"
+
+    def test_hard_link_unsupported_falls_back_to_reservation_publish(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # S1.3-Q1: exFAT/FAT32 volumes don't support hard links; os.link
+        # raises something other than FileExistsError there.
+        def boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+
+        monkeypatch.setattr(os, "link", boom)
+        path = tmp_path / "ep42.en.srt"
+
+        write_output("content", path, force=False)
+
+        assert path.read_text(encoding="utf-8") == "content"
+        assert [entry.name for entry in tmp_path.iterdir()] == ["ep42.en.srt"]
+
+        normal = tmp_path / "normal-reference.txt"
+        normal.write_text("x")
+        assert stat.S_IMODE(path.stat().st_mode) == stat.S_IMODE(normal.stat().st_mode)
+
+    def test_hard_link_unsupported_with_existing_target_raises_and_is_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+
+        monkeypatch.setattr(os, "link", boom)
+        path = tmp_path / "ep42.en.srt"
+        path.write_bytes(b"original")
+
+        with pytest.raises(OutputExistsError) as exc_info:
+            write_output("new content", path, force=False)
+
+        assert str(exc_info.value) == "ep42.en.srt already exists."
+        assert path.read_bytes() == b"original"
+        assert [entry.name for entry in tmp_path.iterdir()] == ["ep42.en.srt"]

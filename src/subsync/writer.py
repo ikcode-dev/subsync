@@ -103,6 +103,7 @@ def write_output(content: str, path: Path, force: bool) -> None:
     """
     path = Path(path)
     data = content.encode("utf-8")
+    mode = _default_file_mode()
 
     tmp_path: Path | None = None
     try:
@@ -114,14 +115,12 @@ def write_output(content: str, path: Path, force: bool) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(tmp_path, _default_file_mode())
+        os.chmod(tmp_path, mode)
 
         if force:
             os.replace(tmp_path, path)
         else:
-            # A hard link fails atomically if the name exists, with no
-            # window between checking and creating it.
-            os.link(tmp_path, path)
+            _publish_no_clobber(tmp_path, path, mode)
     except FileExistsError as exc:
         raise OutputExistsError(
             f"{path.name} already exists.", hint=_EXISTS_HINT
@@ -131,7 +130,64 @@ def write_output(content: str, path: Path, force: bool) -> None:
         logger.debug("write to %s failed: %s", path, exc)
         raise OutputError(f"Couldn't write {path.name}: {reason}.") from exc
     finally:
-        # os.link leaves the temporary file behind on success; every other
-        # path (including a bare KeyboardInterrupt) leaves it behind too.
+        # Covers every exit: success (nothing left to remove), a mapped
+        # error, and a bare KeyboardInterrupt at any point above.
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
+
+
+def _publish_no_clobber(tmp_path: Path, path: Path, mode: int) -> None:
+    """Publish ``tmp_path`` under ``path``, never replacing an existing file.
+
+    A hard link is atomic and leaves no window between checking and
+    creating the name, so it is tried first. Some filesystems (exFAT,
+    FAT32 — common on external drives) don't support hard links, and a
+    temp file and its target can end up on different devices; either
+    raises an ``OSError`` other than ``FileExistsError``, which falls back
+    to an exclusive-create reservation instead.
+
+    Args:
+        tmp_path: The finished temporary file to publish.
+        path: The final path; must not already exist.
+        mode: Permissions to give the reservation in the fallback path.
+
+    Raises:
+        FileExistsError: ``path`` already exists.
+        OSError: The fallback publish failed for another reason.
+    """
+    try:
+        os.link(tmp_path, path)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        logger.debug(
+            "hard link publish to %s failed (%s); falling back to a reservation",
+            path,
+            exc,
+        )
+        _publish_via_reservation(tmp_path, path, mode)
+
+
+def _publish_via_reservation(tmp_path: Path, path: Path, mode: int) -> None:
+    """Reserve ``path`` exclusively, then replace it with the finished file.
+
+    Used when a hard link is not available. The reservation is briefly
+    visible as an empty file; it is removed again if anything goes wrong,
+    including a ``KeyboardInterrupt``, before the replace completes.
+
+    Args:
+        tmp_path: The finished temporary file to publish.
+        path: The final path; must not already exist.
+        mode: Permissions for the reservation (discarded once replaced).
+
+    Raises:
+        FileExistsError: ``path`` already exists.
+        OSError: The replace failed for another reason.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    os.close(fd)
+    try:
+        os.replace(tmp_path, path)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
