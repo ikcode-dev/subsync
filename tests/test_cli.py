@@ -397,6 +397,53 @@ class TestVerboseLoggingIsolation:
         assert "DEBUG" not in captured.err
 
 
+class TestSummarizeUnexpectedException:
+    """The F25 one-line summary never doubles a period or ends up blank.
+
+    Refs: S1.6-Q6
+    """
+
+    def test_trailing_period_is_not_doubled(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def raise_it(args: object) -> int:
+            raise ValueError("bad value.")
+
+        monkeypatch.setattr(cli, "run_generate", raise_it)
+
+        cli.main(["generate", "x"])
+
+        captured = capsys.readouterr()
+        assert "✗ Something went wrong: bad value.." not in captured.err
+        assert "✗ Something went wrong: bad value." in captured.err
+
+    def test_leading_blank_line_is_skipped(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def raise_it(args: object) -> int:
+            raise ValueError("\nfoo")
+
+        monkeypatch.setattr(cli, "run_generate", raise_it)
+
+        cli.main(["generate", "x"])
+
+        captured = capsys.readouterr()
+        assert "✗ Something went wrong: foo." in captured.err
+
+    def test_blank_message_falls_back_to_class_name(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def raise_it(args: object) -> int:
+            raise RuntimeError("   ")
+
+        monkeypatch.setattr(cli, "run_generate", raise_it)
+
+        cli.main(["generate", "x"])
+
+        captured = capsys.readouterr()
+        assert "✗ Something went wrong: RuntimeError." in captured.err
+
+
 # Scenario 13
 class TestFastStartup:
     """Running a stage 0/1 failure must not import the ML stack."""
