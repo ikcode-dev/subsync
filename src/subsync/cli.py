@@ -1,23 +1,37 @@
 """SubSync command-line interface.
 
-Argument parsing, static catalog validation, local-file input resolution
-and the single error boundary that turns every outcome into the right
-message and exit code. Fast startup: this module, and every stage 0-1
-failure path, must never import the ML stack (whisper, torch, yt_dlp); see
+Argument parsing, static catalog validation, the fail-fast stage 0-1 checks,
+stage lines and the summary, and the single error boundary that turns every
+outcome into the right message and exit code. Progress and errors go to
+stderr, the summary to stdout (U6).
+
+Fast startup: this module, and every stage 0-1 failure path, must never
+import the ML stack (whisper, torch, yt_dlp); see
 `spec/plan/phase-4-cli-output.md` -> "Fast Startup". `subsync.pipeline`,
 `subsync.transcriber` and `subsync.audio_extractor` import those modules at
-their top level, so they are never imported here.
+their top level, so `subsync.pipeline` is imported only once the output
+pre-check has passed.
 """
 
 import argparse
 import logging
+import shutil
 import sys
+import time
 import traceback
+from datetime import timedelta
 from importlib import metadata
+from typing import TYPE_CHECKING, TextIO
 
 from subsync import catalog
 from subsync.errors import InputError, SubSyncError
+from subsync.media import check_ffmpeg
+from subsync.models import ProcessingConfig, TranscriptionConfig
+from subsync.output import check_output_args, plan_output
 from subsync.sources import resolve_input
+
+if TYPE_CHECKING:
+    from subsync.pipeline import GenerateEvent, GenerateResult
 
 logger = logging.getLogger(__name__)
 
@@ -116,46 +130,213 @@ def _validate_model(name: str) -> None:
 
 
 def run_generate(args: argparse.Namespace) -> int:
-    """Run `subsync generate`.
+    """Run `subsync generate` from validated arguments to the summary.
 
-    This is the seam task S1.7 fills in. As of slice S1.6 it covers stage 0
-    (`-l`/`-m` validation) and stage 1 (input resolution), then stops by
-    raising: there is no writer wired up yet, so a "successful" run here
-    would silently write nothing, which would contradict decision 0009
-    (exit 0 means a file was written).
-
-    S1.7 will:
-    - add the `-o`/`-f` consistency check (F4) and the FFmpeg check (F6) to
-      stage 0, before input resolution;
-    - use the resolved `MediaSource` to run the output pre-check, audio
-      extraction, transcription, subtitle processing and the write, render
-      the stage lines and summary, and return the final exit code, in
-      place of the `raise` below.
+    Stages 0-1 run here and fail fast, before any heavy import: argument
+    values (F2, F3), `-o`/`-f` consistency (F4), FFmpeg on PATH (F6), input
+    resolution (F7, F8) and the output pre-check (F11, F12). The rest runs in
+    `pipeline.generate`, whose stage events become stderr lines. The summary
+    goes to stdout.
 
     Args:
         args: Parsed arguments from the `generate` subcommand (`input`,
             `language`, `model`, `format`, `output`, `force`, `verbose`).
 
     Returns:
-        The process exit code. (Never returns in S1.6; see above.)
+        0 once the subtitle file is written (decision 0009).
 
     Raises:
-        SubSyncError: Any stage 0/1 validation failure (F2, F3, F7, F8, or
-            the interim YouTube-URL message), or, once input resolves, the
-            S1.6 stub error marking the rest of the pipeline as not yet
-            wired up.
+        SubSyncError: Any failure, mapped to its exit code by `main`.
     """
+    started = time.monotonic()
+
     _validate_language(args.language)
     _validate_model(args.model)
+    check_output_args(args.output, args.format)
+    check_ffmpeg()
 
-    resolve_input(args.input)
+    source = resolve_input(args.input)
+    plan = plan_output(source, args.output, args.format, args.language, args.force)
 
-    # --- S1.7 continues from here (see the docstring above). ---
-    raise SubSyncError(
-        "generate is not wired up yet.",
-        hint="This lands in S1.7; the seam only validates arguments and "
-        "resolves input for now.",
+    from subsync import pipeline  # Imports Whisper and yt-dlp (1-2 s).
+
+    result = pipeline.generate(
+        source,
+        TranscriptionConfig(model_name=args.model, language=args.language),
+        ProcessingConfig(),
+        plan,
+        args.format,
+        args.force,
+        _print_stage,
     )
+
+    width = shutil.get_terminal_size().columns
+    for line in _summary_lines(result, time.monotonic() - started, args.verbose, width):
+        print(line, file=sys.stdout)
+    return 0
+
+
+# =============================================================================
+# Stage lines (stderr) and the summary (stdout)
+# =============================================================================
+
+_STAGE_WIDTH = 59
+"""Stage lines right-align their time to this column, as in the UX transcript."""
+
+_FLAG_LIMIT = 5
+_PREVIEW_WIDTH = 42
+_FLAG_LABELS = {"short": "short", "long_word": "long word", "cps": "CPS"}
+_UPLOAD_HINT = (
+    "Next: YouTube Studio → Subtitles → your video → Add → Upload file → With timing"
+)
+
+
+def _clock(seconds: float) -> str:
+    """Format a media duration as `M:SS`, or `H:MM:SS` from one hour."""
+    hours, rest = divmod(round(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def _elapsed(seconds: float) -> str:
+    """Format a stage time as `4s`, `6m 02s` or `1h 02m`."""
+    total = round(seconds)
+    if total < 60:
+        return f"{total}s"
+    minutes, secs = divmod(total, 60)
+    if minutes < 60:
+        return f"{minutes}m {secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
+
+
+def _timestamp(moment: timedelta) -> str:
+    """Format a subtitle start as `HH:MM:SS`, as the Studio editor shows it."""
+    hours, rest = divmod(int(moment.total_seconds()), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _done(label: str, seconds: float | None = None) -> str:
+    """A finished stage line: `✓ <label>`, with its time right-aligned."""
+    line = f"✓ {label}"
+    if seconds is None:
+        return line
+    time_text = _elapsed(seconds)
+    padding = max(2, _STAGE_WIDTH - len(line) - len(time_text))
+    return f"{line}{' ' * padding}{time_text}"
+
+
+def _language_label(code: str, detected: bool) -> str:
+    """`English (auto-detected)` or `English (set with -l)`."""
+    name = catalog.LANGUAGES.get(code, code)
+    return f"{name} (auto-detected)" if detected else f"{name} (set with -l)"
+
+
+def _stage_lines(event: "GenerateEvent") -> list[str]:
+    """The stderr lines for one `pipeline.generate` stage event."""
+    from subsync import pipeline  # Already imported once events exist.
+
+    match event:
+        case pipeline.SourceReady(source=source):
+            return [
+                f"{source.display_name} · {_clock(source.duration or 0)} · local file"
+            ]
+        case pipeline.AudioExtracted(seconds=seconds):
+            return [_done("Extracted audio", seconds)]
+        case pipeline.ModelDownloading(model_name=name):
+            return [f"  Downloading model '{name}' (one-time)…"]
+        case pipeline.ModelLoaded(model_name=name, device=device, seconds=seconds):
+            return [_done(f"Loaded model {name} on {device}", seconds)]
+        case pipeline.TranscriptionStarted(audio_duration=duration):
+            return [f"  Transcribing {_clock(duration)} of audio…"]
+        case pipeline.Transcribed(
+            seconds=seconds, language=language, language_detected=detected
+        ):
+            return [
+                _done("Transcribed", seconds),
+                f"  Language: {_language_label(language, detected)}",
+            ]
+        case pipeline.Formatted(segment_count=segments, subtitle_count=subtitles):
+            return [_done(f"Formatted {segments} segments → {subtitles} subtitles")]
+        case pipeline.Written():
+            return [_done("Wrote subtitles"), ""]
+    return []
+
+
+def _print_stage(event: "GenerateEvent", stream: TextIO | None = None) -> None:
+    """Print one stage event's lines to stderr as soon as it happens."""
+    stream = stream or sys.stderr
+    for line in _stage_lines(event):
+        print(line, file=stream, flush=True)
+
+
+def _preview(text: str, width: int) -> str:
+    """Cut `text` to `width` with `…` for display only, padded to `width`."""
+    if len(text) > width:
+        text = text[: width - 1] + "…"
+    return text.ljust(width)
+
+
+def _summary_lines(
+    result: "GenerateResult", total_seconds: float, verbose: bool, width: int
+) -> list[str]:
+    """The success summary (R19, P2): file first, then what to review.
+
+    Args:
+        result: What `pipeline.generate` produced.
+        total_seconds: Wall time of the whole run.
+        verbose: List every flagged subtitle instead of the first five.
+        width: Terminal width; only the previews are shortened to fit it.
+
+    Returns:
+        The summary lines, without trailing newlines.
+    """
+    report = result.report
+    flags = report.flags
+    if report.errors:
+        headline = "✗ Written but not compliant, please report with -v output"
+    elif flags:
+        headline = f"✓ Subtitles written, {len(flags)} to review"
+    else:
+        headline = "✓ Subtitles written"
+
+    duration = _clock(result.source.duration or 0)
+    language = _language_label(result.language, result.language_detected)
+    lines = [
+        headline,
+        f"  File:      {result.path}",
+        f"  Source:    {result.source.display_name} · {duration}",
+        f"  Language:  {language}",
+        f"  Model:     {result.model_name} on {result.device}"
+        f" · {_elapsed(total_seconds)} total",
+        f"  Subtitles: {len(result.subtitles)}",
+    ]
+
+    if flags:
+        shown = flags if verbose else flags[:_FLAG_LIMIT]
+        texts = {subtitle.index: subtitle.text for subtitle in result.subtitles}
+        labels = [
+            flag.detail
+            if flag.kind == "cps" and flag.detail
+            else _FLAG_LABELS[flag.kind]
+            for flag in shown
+        ]
+        preview_width = max(
+            10, min(_PREVIEW_WIDTH, width - 16 - max(len(label) for label in labels))
+        )
+        lines += ["", "  To review:"]
+        for flag, label in zip(shown, labels, strict=True):
+            preview = _preview(texts.get(flag.subtitle_index, ""), preview_width)
+            lines.append(f"    {_timestamp(flag.start_time)}  {preview}  {label}")
+        hidden = len(flags) - len(shown)
+        if hidden:
+            lines.append(f"    … {hidden} more (run with -v to list all)")
+
+    lines += ["", f"  {_UPLOAD_HINT}"]
+    return lines
 
 
 def _summarize(exc: BaseException) -> str:

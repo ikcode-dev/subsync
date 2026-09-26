@@ -4,9 +4,9 @@ Scenario numbers refer to the table in "Task S1.6" of
 `spec/tasks/slice-1-local-file-srt.tasks.md`. Scenario 14 (catalog drift
 against installed Whisper) lives in `tests/test_catalog.py`.
 
-`run_generate` is the seam S1.7 fills in; scenarios 10-12 replace it with a
-stand-in to test the error boundary in `main` independently of input
-resolution.
+Scenarios 10-12 replace `run_generate` with a stand-in to test the error
+boundary in `main` on its own. The full `generate` journey is covered by
+`tests/test_cli_integration.py`.
 """
 
 import logging
@@ -444,30 +444,6 @@ class TestSummarizeUnexpectedException:
 
         captured = capsys.readouterr()
         assert "✗ Something went wrong: RuntimeError." in captured.err
-
-
-class TestSeamStubNotWiredUp:
-    """Until S1.7 fills the seam, a resolvable input still fails visibly.
-
-    Decision 0009: exit 0 must mean a file was written. Before S1.7 wires
-    up the writer, `run_generate` must not return 0 for an input it can
-    resolve, or a "successful" run would silently write nothing.
-
-    Refs: S1.6-Q4
-    """
-
-    def test_existing_file_fails_with_not_wired_up_message(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        video = tmp_path / "clip.mp4"
-        video.write_bytes(b"fake")
-
-        rc = cli.main(["generate", str(video)])
-
-        captured = capsys.readouterr()
-        assert rc == 1
-        assert captured.out == ""
-        assert "✗ generate is not wired up yet." in captured.err
 
 
 # Scenario 13
