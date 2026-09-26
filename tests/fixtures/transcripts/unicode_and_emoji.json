@@ -1,0 +1,34 @@
+{
+  "description": "Polish diacritics in upper and lower case, emoji with a skin tone and a ZWJ sequence.",
+  "language": "pl",
+  "duration": 10.0,
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.5,
+      "end": 2.5,
+      "text": " ZAŻÓŁĆ GĘŚLĄ JAŹŃ",
+      "words": [
+        {"word": " ZAŻÓŁĆ", "start": 0.5, "end": 1.26},
+        {"word": " GĘŚLĄ", "start": 1.26, "end": 1.93},
+        {"word": " JAŹŃ", "start": 1.93, "end": 2.5}
+      ]
+    },
+    {
+      "id": 1,
+      "start": 3.5,
+      "end": 6.5,
+      "text": " zażółć gęślą jaźń 🎉 👍🏽 👩‍💻 café naïve",
+      "words": [
+        {"word": " zażółć", "start": 3.5, "end": 4.02},
+        {"word": " gęślą", "start": 4.02, "end": 4.48},
+        {"word": " jaźń", "start": 4.48, "end": 4.87},
+        {"word": " 🎉", "start": 4.87, "end": 5.07},
+        {"word": " 👍🏽", "start": 5.07, "end": 5.33},
+        {"word": " 👩‍💻", "start": 5.33, "end": 5.65},
+        {"word": " café", "start": 5.65, "end": 6.04},
+        {"word": " naïve", "start": 6.04, "end": 6.5}
+      ]
+    }
+  ]
+}

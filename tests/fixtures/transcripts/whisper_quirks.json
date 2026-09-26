@@ -1,0 +1,67 @@
+{
+  "description": "Whisper glitches: overlapping segments, zero-length and identical word times, a backwards word, an end before its start, a segment without words, an empty segment, doubled and trailing whitespace in word text.",
+  "language": "en",
+  "duration": 16.0,
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.5,
+      "end": 3.2,
+      "text": " So  we open the\tterminal,  first.",
+      "words": [
+        {"word": " So", "start": 0.5, "end": 0.7},
+        {"word": "  we", "start": 0.7, "end": 0.7},
+        {"word": " open", "start": 0.7, "end": 0.7},
+        {"word": " the\t", "start": 0.7, "end": 1.1},
+        {"word": "terminal,", "start": 0.9, "end": 1.6},
+        {"word": "  first.", "start": 1.6, "end": 3.2}
+      ]
+    },
+    {
+      "id": 1,
+      "start": 2.9,
+      "end": 5.0,
+      "text": " Then we type the command.",
+      "words": [
+        {"word": " Then", "start": 2.9, "end": 3.1},
+        {"word": " we", "start": 3.1, "end": 3.1},
+        {"word": " type", "start": 3.1, "end": 3.1},
+        {"word": " the", "start": 2.2, "end": 2.4},
+        {"word": " command.", "start": 3.5, "end": 3.4}
+      ]
+    },
+    {
+      "id": 2,
+      "start": 5.0,
+      "end": 5.5,
+      "text": "  ",
+      "words": []
+    },
+    {
+      "id": 3,
+      "start": 5.03,
+      "end": 9.0,
+      "text": " And this segment has no word timestamps at all, so its times are interpolated.",
+      "words": []
+    },
+    {
+      "id": 4,
+      "start": 9.0,
+      "end": 9.0,
+      "text": " Done.",
+      "words": [
+        {"word": " Done.", "start": 9.0, "end": 9.0}
+      ]
+    },
+    {
+      "id": 5,
+      "start": 9.0,
+      "end": 9.05,
+      "text": " Really done.",
+      "words": [
+        {"word": " Really", "start": 9.0, "end": 9.0},
+        {"word": " done.", "start": 9.0, "end": 9.05}
+      ]
+    }
+  ]
+}
