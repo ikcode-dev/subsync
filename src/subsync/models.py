@@ -133,8 +133,8 @@ class Subtitle:
 
     @property
     def duration_ms(self) -> int:
-        """Duration in milliseconds."""
-        return int((self.end_time - self.start_time).total_seconds() * 1000)
+        """Duration in whole milliseconds, rounded down (exact integer arithmetic)."""
+        return (self.end_time - self.start_time) // timedelta(milliseconds=1)
 
     @property
     def cps(self) -> float:

@@ -139,6 +139,23 @@ class TestSubtitle:
         )
         assert subtitle.duration_ms == 2500
 
+    def test_duration_ms_is_exact_for_whole_milliseconds(self) -> None:
+        """Whole-millisecond durations are never off by one (float truncation)."""
+        start = timedelta(seconds=3)
+        wrong = [
+            ms
+            for ms in range(0, 20_001)
+            if Subtitle(
+                index=1,
+                start_time=start,
+                end_time=start + timedelta(milliseconds=ms),
+                text="x",
+                lines=["x"],
+            ).duration_ms
+            != ms
+        ]
+        assert wrong == []
+
     def test_cps_calculation(self) -> None:
         """Test characters per second calculation."""
         subtitle = Subtitle(
