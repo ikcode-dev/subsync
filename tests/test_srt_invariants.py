@@ -1,5 +1,10 @@
 """Tests for the SRT invariant checker test helper."""
 
+import ast
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from srt_invariants import (
     Cue,
@@ -38,10 +43,18 @@ def violations_of(text: str | bytes) -> list[str]:
 
 
 def assert_single_violation(text: str | bytes, fragment: str) -> None:
-    """Assert that exactly one violation is reported and it mentions fragment."""
+    """Assert that exactly one violation is reported and it mentions fragment.
+
+    Checks both the violation list and ``assert_valid_srt``, which tests rely on.
+    """
     found = violations_of(text)
     assert len(found) == 1, found
     assert fragment in found[0], found
+    data = text.encode("utf-8") if isinstance(text, str) else text
+    with pytest.raises(AssertionError) as info:
+        assert_valid_srt(data, ProcessingConfig())
+    assert "(1 violations)" in str(info.value)
+    assert fragment in str(info.value)
 
 
 class TestParse:
@@ -274,10 +287,48 @@ class TestShortCues:
         assert short_cues(parse_srt(text.encode()), ProcessingConfig()) == []
 
 
+FORBIDDEN_MODULES = ("subsync.processor", "subsync.writer")
+
+
+def _imported_modules(tree: ast.Module) -> set[str]:
+    """Return every module an AST imports, including `from pkg import mod`."""
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+            names.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return names
+
+
 def test_checker_does_not_import_processor_or_writer() -> None:
     """The checker is independent of the code it checks."""
     import srt_invariants
 
-    source = open(srt_invariants.__file__, encoding="utf-8").read()
-    assert "subsync.processor" not in source
-    assert "subsync.writer" not in source
+    source = Path(srt_invariants.__file__).read_text(encoding="utf-8")
+    imported = _imported_modules(ast.parse(source))
+    assert not imported & set(FORBIDDEN_MODULES), imported
+
+
+def test_importing_checker_loads_neither_processor_nor_writer() -> None:
+    """Importing the checker in a fresh interpreter loads neither module."""
+    tests_dir = Path(__file__).parent
+    code = (
+        "import sys; import srt_invariants; "
+        f"print(any(m in sys.modules for m in {FORBIDDEN_MODULES!r}))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tests_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False"
+
+
+def test_import_guard_catches_from_package_imports() -> None:
+    """The guard sees `from subsync import processor`, not only dotted names."""
+    tree = ast.parse("from subsync import processor, writer\n")
+    assert set(FORBIDDEN_MODULES) <= _imported_modules(tree)
