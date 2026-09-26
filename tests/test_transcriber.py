@@ -408,16 +408,46 @@ class TestTranscribeWithModel:
         captured = capfd.readouterr()
         assert captured.out == ""
         assert captured.err == ""
-        assert any(record.levelno == logging.DEBUG for record in caplog.records)
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("50%" in m and "5/10" in m for m in messages), messages
+        assert any("FP16" in m for m in messages), messages
 
-    def test_warnings_behave_normally_outside_the_scope(self) -> None:
-        """Suppression is scoped: a warning issued outside still surfaces normally."""
+    def test_state_restored_after_the_quiet_scope(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """S1.5-Q2: stderr and the warnings filters are restored, not just quiet.
+
+        A process-wide `warnings.simplefilter("ignore")` left in place
+        (instead of scoping suppression with `catch_warnings`) would still
+        satisfy "no output on stderr", so this checks the ambient state
+        directly: `sys.stderr` is the original object again, and a warning
+        emitted afterwards -- without this test resetting any filter
+        itself -- still surfaces normally.
+        """
+        original_stderr = sys.stderr
+
+        def fake_transcribe(*args: object, **kwargs: object) -> dict:
+            sys.stderr.write("50%|#####     | 5/10 [00:01<00:01]\r")
+            warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+            return MOCK_WHISPER_RESULT
+
+        engine = MagicMock()
+        engine.transcribe.side_effect = fake_transcribe
+        model = self._loaded_model(engine)
+
+        with caplog.at_level(logging.DEBUG, logger="subsync.transcriber"):
+            transcribe_with_model(model, Path("/fake/audio.wav"), TranscriptionConfig())
+
+        assert sys.stderr is original_stderr
+
         with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
-            warnings.warn("unrelated warning", UserWarning)
+            # No simplefilter() call here on purpose: if the suppression
+            # under test leaked a process-wide "ignore" filter instead of
+            # restoring the previous one, this warning would silently
+            # vanish instead of being recorded.
+            warnings.warn("outside the scope", UserWarning)
 
-        assert len(recorded) == 1
-        assert "unrelated warning" in str(recorded[0].message)
+        assert any("outside the scope" in str(w.message) for w in recorded)
 
 
 # =============================================================================
