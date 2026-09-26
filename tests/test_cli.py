@@ -12,10 +12,10 @@ resolution.
 import logging
 import subprocess
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from conftest import isolated_root_logging
 from subsync import catalog, cli
 from subsync.errors import (
     AgeRestrictedError,
@@ -34,30 +34,6 @@ from subsync.errors import (
     URLParseError,
     VideoUnavailableError,
 )
-
-
-@pytest.fixture(autouse=True)
-def _isolate_root_logging() -> Iterator[None]:
-    """Undo `main`'s `logging.basicConfig(..., force=True)` after each test.
-
-    `main` reconfigures the *root* logger on every call so that `-v` turns
-    on DEBUG logging in the real CLI process. In-process tests share that
-    same root logger across the whole pytest session, so without this
-    reset a `-v` test would leave DEBUG (and a `StreamHandler` bound to
-    that test's now-torn-down `capsys` stream) in place for every test
-    that runs after it. See `TestVerboseLoggingIsolation` below for a
-    regression test that fails without this fixture.
-
-    Refs: S1.6-Q5
-    """
-    root = logging.getLogger()
-    original_handlers = list(root.handlers)
-    original_level = root.level
-    try:
-        yield
-    finally:
-        root.handlers = original_handlers
-        root.setLevel(original_level)
 
 
 # Scenario 1
@@ -132,8 +108,7 @@ class TestUnknownModel:
         assert rc == 2
         assert captured.out == ""
         assert "✗ Unknown model 'banana'." in captured.err
-        for name in catalog.MODEL_NAMES:
-            assert name in captured.err
+        assert "  Valid models: " + ", ".join(catalog.MODEL_NAMES) in captured.err
 
 
 # Scenario 6
@@ -352,7 +327,8 @@ class TestSeamSubSyncErrorTraceback:
         assert rc == 4
         assert captured.out == ""
         assert "Traceback" in captured.err
-        assert "underlying decode failure" in captured.err
+        assert "ValueError: underlying decode failure" in captured.err
+        assert "direct cause of the following exception" in captured.err
         assert "✗ Transcription failed: underlying decode failure." in captured.err
         # The traceback (and its chained cause) come before the ✗ block.
         assert captured.err.index("Traceback") < captured.err.index("✗ Transcription")
@@ -376,14 +352,23 @@ class TestVerboseLoggingIsolation:
         assert "DEBUG" in captured.err
         assert logging.getLogger().level == logging.DEBUG
 
-    def test_root_level_is_restored_before_this_test(self) -> None:
-        """Proves `_isolate_root_logging` undoes the previous test's `-v`.
+    def test_isolation_restores_root_handlers_and_level(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`main -v` inside `isolated_root_logging` leaves no trace behind."""
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"fake")
+        root = logging.getLogger()
+        handlers_before = list(root.handlers)
+        level_before = root.level
 
-        Depends on running after `test_verbose_shows_debug_records` above
-        (default, in-file pytest order); fails without the autouse fixture,
-        since `main` would otherwise leave the root logger at DEBUG.
-        """
-        assert logging.getLogger().level != logging.DEBUG
+        with isolated_root_logging():
+            cli.main(["generate", str(video), "-v"])
+            assert root.level == logging.DEBUG
+
+        capsys.readouterr()
+        assert root.handlers == handlers_before
+        assert root.level == level_before
 
     def test_without_verbose_no_debug_records(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -429,6 +414,23 @@ class TestSummarizeUnexpectedException:
 
         captured = capsys.readouterr()
         assert "✗ Something went wrong: foo." in captured.err
+
+    @pytest.mark.parametrize("message", [".", " . "])
+    def test_lone_period_falls_back_to_class_name(
+        self,
+        message: str,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        def raise_it(args: object) -> int:
+            raise ValueError(message)
+
+        monkeypatch.setattr(cli, "run_generate", raise_it)
+
+        cli.main(["generate", "x"])
+
+        captured = capsys.readouterr()
+        assert "✗ Something went wrong: ValueError." in captured.err
 
     def test_blank_message_falls_back_to_class_name(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
