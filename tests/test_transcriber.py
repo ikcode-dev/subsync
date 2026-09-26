@@ -3,6 +3,7 @@
 import logging
 import sys
 import warnings
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from urllib.error import URLError
@@ -218,6 +219,36 @@ class TestLoadModel:
 
         assert not weights.exists()
         assert is_model_cached("tiny") is False
+
+    @pytest.mark.parametrize(
+        "failure", [MemoryError(), KeyboardInterrupt()], ids=["oom", "ctrl-c"]
+    )
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_load_failure_after_a_complete_download_keeps_the_file(
+        self,
+        mock_device: MagicMock,
+        mock_whisper: MagicMock,
+        failure: BaseException,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A verified download survives a load that fails afterwards."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        weights = tmp_path / "whisper" / "tiny.pt"
+
+        def download_then_fail_to_load(name: str, device: str) -> None:
+            weights.parent.mkdir(exist_ok=True)
+            with zipfile.ZipFile(weights, "w") as archive:  # like torch.save
+                archive.writestr("tiny/data.pkl", b"weights")
+            raise failure
+
+        mock_whisper.load_model.side_effect = download_then_fail_to_load
+
+        with pytest.raises((KeyboardInterrupt, ModelMemoryError)):
+            load_model(TranscriptionConfig(model_name="tiny"))
+
+        assert zipfile.is_zipfile(weights)
 
     @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber._resolve_device", return_value="cpu")

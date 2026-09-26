@@ -15,6 +15,7 @@ import logging
 import os
 import threading
 import warnings
+import zipfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.client import HTTPException
@@ -338,12 +339,26 @@ def _discard_partial_download(model_name: str) -> None:
     an interrupted first run would leave a partial file that the next run
     takes for a cached model, skipping the one-time download notice (R7).
     Only called when the file did not exist before this load.
+
+    Whisper verifies a finished download before loading it, so a load can
+    also fail (out of memory, Ctrl+C) after a complete, valid file is on
+    disk. Checkpoints are zip archives, which end with a directory record
+    that a truncated download lacks, so only a file that is not a complete
+    archive is removed. The check reads only the end of the file, keeping
+    Ctrl+C fast.
     """
     path = _model_cache_path(model_name)
-    if path is not None:
-        with contextlib.suppress(FileNotFoundError):
-            path.unlink()
-            logger.debug("Removed partial model download %s", path)
+    if path is None or not path.is_file():
+        return
+    try:
+        if zipfile.is_zipfile(path):
+            logger.debug("Kept complete model download %s", path)
+            return
+        path.unlink()
+        logger.debug("Removed partial model download %s", path)
+    except OSError as exc:
+        # Never let cleanup replace the error (or Ctrl+C) being handled.
+        logger.debug("Couldn't remove partial model download %s: %s", path, exc)
 
 
 def _map_segments(raw_segments: list[dict]) -> list[TranscriptionSegment]:
