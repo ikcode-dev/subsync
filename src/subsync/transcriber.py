@@ -13,11 +13,14 @@ retired.
 import contextlib
 import logging
 import os
+import socket
 import warnings
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from http.client import HTTPException
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 
 import whisper
 
@@ -30,6 +33,20 @@ from subsync.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Exception types that indicate a failed (or interrupted) network fetch of
+# model weights, regardless of what is_model_cached() reported. socket.error
+# is an alias for OSError; URLError (and its subclass HTTPError) and the
+# builtin ConnectionError/TimeoutError are all OSError subclasses too, so
+# this in practice covers any OSError raised while fetching, plus the
+# protocol-level http.client.HTTPException.
+_DOWNLOAD_EXCEPTION_TYPES = (
+    URLError,
+    HTTPException,
+    ConnectionError,
+    TimeoutError,
+    socket.error,
+)
 
 # Whisper caches weights under the basename of each model's download URL
 # (see ``whisper._MODELS`` in openai-whisper 20250625). This mapping is kept
@@ -143,6 +160,29 @@ def _is_out_of_memory(exc: Exception) -> bool:
     return isinstance(exc, RuntimeError) and "out of memory" in str(exc).lower()
 
 
+def _is_download_error(exc: Exception) -> bool:
+    """Check whether an exception looks like a failed model download.
+
+    This covers network/HTTP failures, which can happen even when
+    ``is_model_cached`` reported the model as cached: Whisper streams
+    straight into the target file, so an interrupted first download can
+    leave a partial file behind that a later run finds and treats as
+    cached, only to re-download after a checksum mismatch. It also covers
+    Whisper's own SHA256 checksum-mismatch ``RuntimeError`` raised after
+    such a re-download attempt.
+
+    Args:
+        exc: The exception raised while loading the model.
+
+    Returns:
+        True if the failure should be reported as a download failure
+        regardless of the cache pre-check.
+    """
+    if isinstance(exc, _DOWNLOAD_EXCEPTION_TYPES):
+        return True
+    return isinstance(exc, RuntimeError) and "checksum" in str(exc).lower()
+
+
 def _reason_text(exc: Exception) -> str:
     """Render an exception as a single-line reason with no trailing period.
 
@@ -213,6 +253,15 @@ def is_model_cached(model_name: str) -> bool:
         ``model_name`` is not one of the known catalog names (such as a
         local checkpoint path), since that is never cached under Whisper's
         cache directory.
+
+    Note:
+        This only checks that a file exists at the expected path; it
+        cannot detect a partial download left behind by an interrupted
+        first download, since Whisper streams straight into the target
+        file rather than a temp name. A subsequent load may still find
+        such a file, treat it as cached, and re-download after a checksum
+        mismatch; ``load_model`` classifies that failure as a download
+        error regardless of what this function reported.
     """
     filename = _MODEL_CACHE_FILENAMES.get(model_name)
     if filename is None:
@@ -230,8 +279,9 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
         The loaded model, its resolved device label, and the engine handle.
 
     Raises:
-        ModelDownloadError: The model is not cached and downloading it
-            failed (network, HTTP, or checksum).
+        ModelDownloadError: Downloading the model failed (network, HTTP,
+            or checksum) -- either because it was not cached, or because a
+            checksum mismatch triggered a re-download that then failed.
         ModelMemoryError: Loading the model ran out of memory.
         TranscriptionError: Any other load failure.
     """
@@ -253,7 +303,7 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
                     f"Ran out of memory with model '{config.model_name}'.",
                     hint="Try a smaller one: -m small",
                 ) from exc
-            if not cached:
+            if not cached or _is_download_error(exc):
                 raise ModelDownloadError(
                     f"Couldn't download model '{config.model_name}': "
                     f"{_reason_text(exc)}.",

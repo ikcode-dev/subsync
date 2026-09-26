@@ -237,6 +237,53 @@ class TestLoadModel:
     @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber.is_model_cached", return_value=True)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_cached_network_failure_is_still_a_download_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q1: a partial first download can leave a cached-looking file.
+
+        is_model_cached() cannot tell a complete weight file from a
+        partial one left by an interrupted first download (Whisper streams
+        straight into the target path). When the load then re-downloads
+        and hits a network error, that is still a download failure, not a
+        generic one, even though the cache pre-check reported cached=True.
+        """
+        mock_whisper.load_model.side_effect = URLError("no network")
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            load_model(config)
+
+        assert "Couldn't download model 'turbo'" in str(exc_info.value)
+        assert exc_info.value.hint == "An internet connection is needed once per model."
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_cached_checksum_mismatch_is_a_download_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q1: Whisper's own checksum-mismatch RuntimeError is a download error."""
+        mock_whisper.load_model.side_effect = RuntimeError(
+            "Model has been downloaded but the SHA256 checksum does not "
+            "match. Please retry loading the model."
+        )
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            load_model(config)
+
+        assert "Couldn't download model 'turbo'" in str(exc_info.value)
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
     def test_runtime_out_of_memory_raises_model_memory_error(
         self,
         mock_device: MagicMock,
