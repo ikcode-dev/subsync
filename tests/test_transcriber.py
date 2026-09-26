@@ -13,7 +13,6 @@ from subsync.errors import ModelDownloadError, ModelMemoryError, TranscriptionEr
 from subsync.models import TranscriptionConfig, TranscriptionResult
 from subsync.transcriber import (
     LoadedModel,
-    _MODEL_CACHE_FILENAMES,
     _resolve_device,
     is_model_cached,
     load_model,
@@ -148,22 +147,36 @@ class TestIsModelCached:
         mock_whisper.assert_not_called()
 
 
-def test_model_cache_filenames_matches_real_whisper_urls() -> None:
-    """Drift guard (S1.5-Q7): _MODEL_CACHE_FILENAMES tracks whisper._MODELS.
+def test_is_model_cached_matches_real_whisper_urls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drift guard (S1.5-Q9): is_model_cached tracks whisper._MODELS.
 
-    Imports the real ``whisper`` package (not a stand-in) so a future
-    openai-whisper upgrade that changes a download URL's basename is
-    caught here instead of silently breaking is_model_cached().
+    Goes through the public is_model_cached() interface, for every model
+    name Whisper actually ships, rather than asserting on the private
+    _MODEL_CACHE_FILENAMES mapping. Imports the real ``whisper`` package
+    (not a stand-in) so a future openai-whisper upgrade that changes a
+    download URL's basename is caught here instead of silently breaking
+    is_model_cached().
     """
     import os as real_os
 
     import whisper as real_whisper
 
-    expected = {
-        name: real_os.path.basename(url) for name, url in real_whisper._MODELS.items()
-    }
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    cache_dir = tmp_path / "whisper"
+    cache_dir.mkdir()
 
-    assert _MODEL_CACHE_FILENAMES == expected
+    for name, url in real_whisper._MODELS.items():
+        weight_file = cache_dir / real_os.path.basename(url)
+
+        assert is_model_cached(name) is False, name
+
+        weight_file.touch()
+        try:
+            assert is_model_cached(name) is True, name
+        finally:
+            weight_file.unlink()
 
 
 # =============================================================================
