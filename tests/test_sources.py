@@ -40,6 +40,22 @@ class TestExistingFile:
         assert source.output_dir == videos
         assert source.path == link
 
+    def test_dotdot_through_a_folder_symlink_finds_the_real_folder(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`dirlink/../clip.mp4` means the folder above dirlink's target."""
+        real_parent = tmp_path / "real"
+        (real_parent / "inner").mkdir(parents=True)
+        video = real_parent / "clip.mp4"
+        video.write_bytes(b"fake")
+        (tmp_path / "dirlink").symlink_to(real_parent / "inner")
+        monkeypatch.chdir(tmp_path)
+
+        source = resolve_input("dirlink/../clip.mp4")
+
+        assert source.path == video
+        assert source.output_dir == real_parent
+
     def test_relative_path_resolves_to_absolute(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -10,7 +10,6 @@ yt_dlp); see `spec/plan/phase-4-cli-output.md` -> "Fast Startup".
 """
 
 import logging
-import os
 from pathlib import Path
 
 from subsync.errors import InputError, URLParseError
@@ -37,9 +36,10 @@ def resolve_input(raw: str) -> MediaSource:
     path = Path(raw)
 
     if path.is_file():
-        # Absolute but not resolved: a symlinked input is named, and its
-        # subtitles placed, after the path the user gave, not its target.
-        absolute = Path(os.path.abspath(path))
+        # The folder is resolved, the name is not: a symlinked input is named
+        # after the link, and `dirlink/../clip.mp4` finds its real folder.
+        given = path.absolute()
+        absolute = given.parent.resolve() / given.name
         logger.debug("resolved input %r to local file %s", raw, absolute)
         return MediaSource(
             kind="file",
