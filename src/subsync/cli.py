@@ -22,17 +22,15 @@ import traceback
 import unicodedata
 from datetime import timedelta
 from importlib import metadata
-from typing import TYPE_CHECKING, TextIO
+from typing import TextIO
 
-from subsync import catalog
+from subsync import catalog, events
 from subsync.errors import InputError, SubSyncError, reason_text
 from subsync.media import check_ffmpeg
 from subsync.models import ProcessingConfig, TranscriptionConfig
 from subsync.output import check_output_args, plan_output
 from subsync.sources import resolve_input
 
-if TYPE_CHECKING:
-    from subsync.pipeline import GenerateEvent, GenerateResult
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "generate",
         help="Generate a subtitle file from a local media file.",
     )
+    generate.set_defaults(handler=run_generate)
     generate.add_argument(
         "input",
         metavar="INPUT",
@@ -166,7 +165,6 @@ def run_generate(args: argparse.Namespace) -> int:
         TranscriptionConfig(model_name=args.model, language=args.language),
         ProcessingConfig(),
         plan,
-        args.format,
         args.force,
         _print_stage,
     )
@@ -192,7 +190,7 @@ _UPLOAD_HINT = (
 )
 
 
-def _clock(seconds: float) -> str:
+def _duration(seconds: float) -> str:
     """Format a media duration as `M:SS`, or `H:MM:SS` from one hour."""
     hours, rest = divmod(round(seconds), 3600)
     minutes, secs = divmod(rest, 60)
@@ -236,38 +234,36 @@ def _language_label(code: str, detected: bool) -> str:
     return f"{name} (auto-detected)" if detected else f"{name} (set with -l)"
 
 
-def _stage_lines(event: "GenerateEvent") -> list[str]:
+def _stage_lines(event: events.GenerateEvent) -> list[str]:
     """The stderr lines for one `pipeline.generate` stage event."""
-    from subsync import pipeline  # Already imported once events exist.
-
     match event:
-        case pipeline.SourceReady(source=source):
+        case events.SourceReady(source=source):
             return [
-                f"{source.display_name} · {_clock(source.duration or 0)} · local file"
+                f"{source.display_name} · {_duration(source.duration or 0)} · local file"
             ]
-        case pipeline.AudioExtracted(seconds=seconds):
+        case events.AudioExtracted(seconds=seconds):
             return [_done("Extracted audio", seconds)]
-        case pipeline.ModelDownloading(model_name=name):
+        case events.ModelDownloading(model_name=name):
             return [f"  Downloading model '{name}' (one-time)…"]
-        case pipeline.ModelLoaded(model_name=name, device=device, seconds=seconds):
+        case events.ModelLoaded(model_name=name, device=device, seconds=seconds):
             return [_done(f"Loaded model {name} on {device}", seconds)]
-        case pipeline.TranscriptionStarted(audio_duration=duration):
-            return [f"  Transcribing {_clock(duration)} of audio…"]
-        case pipeline.Transcribed(
+        case events.TranscriptionStarted(audio_duration=duration):
+            return [f"  Transcribing {_duration(duration)} of audio…"]
+        case events.Transcribed(
             seconds=seconds, language=language, language_detected=detected
         ):
             return [
                 _done("Transcribed", seconds),
                 f"  Language: {_language_label(language, detected)}",
             ]
-        case pipeline.Formatted(segment_count=segments, subtitle_count=subtitles):
+        case events.Formatted(segment_count=segments, subtitle_count=subtitles):
             return [_done(f"Formatted {segments} segments → {subtitles} subtitles")]
-        case pipeline.Written():
+        case events.Written():
             return [_done("Wrote subtitles"), ""]
     return []
 
 
-def _print_stage(event: "GenerateEvent", stream: TextIO | None = None) -> None:
+def _print_stage(event: events.GenerateEvent, stream: TextIO | None = None) -> None:
     """Print one stage event's lines to stderr as soon as it happens."""
     stream = stream or sys.stderr
     for line in _stage_lines(event):
@@ -282,7 +278,7 @@ def _preview(text: str, width: int) -> str:
 
 
 def _summary_lines(
-    result: "GenerateResult", total_seconds: float, verbose: bool, width: int
+    result: events.GenerateResult, total_seconds: float, verbose: bool, width: int
 ) -> list[str]:
     """The success summary (R19, P2): file first, then what to review.
 
@@ -304,7 +300,7 @@ def _summary_lines(
     else:
         headline = "✓ Subtitles written"
 
-    duration = _clock(result.source.duration or 0)
+    duration = _duration(result.source.duration or 0)
     language = _language_label(result.language, result.language_detected)
     lines = [
         headline,
@@ -411,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        return run_generate(args)
+        return args.handler(args)
     except SubSyncError as err:
         if verbose:
             _print_traceback()
@@ -420,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("Cancelled. Nothing written.", file=sys.stderr)
         return 130
-    except Exception as exc:  # noqa: BLE001 - last-resort boundary (F25)
+    except Exception as exc:  # Last-resort boundary (F25).
         if verbose:
             _print_traceback()
         _print_error(

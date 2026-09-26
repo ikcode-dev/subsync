@@ -14,6 +14,7 @@ import contextlib
 import logging
 import os
 import tempfile
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 
@@ -69,6 +70,10 @@ def render_srt(subtitles: list[Subtitle]) -> str:
         )
         blocks.append("\n".join([str(position), timing, *subtitle.lines]))
     return "\n\n".join(blocks) + "\n" if blocks else ""
+
+
+RENDERERS: dict[str, Callable[[list[Subtitle]], str]] = {"srt": render_srt}
+"""Renderer for each output format; S5 adds ``"vtt"``."""
 
 
 def _default_file_mode() -> int:

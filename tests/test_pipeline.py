@@ -10,7 +10,7 @@ from srt_invariants import assert_valid_srt
 from transcriber_stand_in import StandInTranscriber
 from transcript_fixtures import EPISODE_WITH_URL, NO_SEGMENTS, URL, load_transcript
 
-from subsync import pipeline
+from subsync import pipeline, transcriber
 from subsync.errors import (
     InputError,
     MediaError,
@@ -302,7 +302,6 @@ def _run_generate(
         TranscriptionConfig(model_name="tiny", language=language),
         ProcessingConfig(),
         plan,
-        "srt",
         force,
         events.append if events is not None else None,
     )
@@ -450,9 +449,14 @@ class TestGenerate:
         stand_in = StandInTranscriber(load_transcript(EPISODE_WITH_URL))
         original = stand_in.transcribe_with_model
 
-        def transcribe_then_race(*args: object, **kwargs: object) -> object:
+        def transcribe_then_race(
+            model: transcriber.LoadedModel,
+            audio_path: Path,
+            config: TranscriptionConfig,
+            progress_callback: object = None,
+        ) -> TranscriptionResult:
             target.write_text("hand-corrected\n", encoding="utf-8")
-            return original(*args, **kwargs)  # type: ignore[arg-type]
+            return original(model, audio_path, config)
 
         stand_in.install(monkeypatch)
         monkeypatch.setattr(
@@ -475,5 +479,5 @@ class TestGenerate:
         plan = plan_output(youtube, None, "srt", "en", False)
         with pytest.raises(InputError):
             pipeline.generate(
-                youtube, TranscriptionConfig(), ProcessingConfig(), plan, "srt", False
+                youtube, TranscriptionConfig(), ProcessingConfig(), plan, False
             )

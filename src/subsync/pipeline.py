@@ -16,17 +16,27 @@ import tempfile
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from pathlib import Path
 
 from subsync import media, transcriber
 from subsync.audio_extractor import download_audio, get_video_metadata
 from subsync.errors import InputError, NoSpeechError, SubSyncError
+from subsync.events import (
+    AudioExtracted,
+    Formatted,
+    GenerateEvent,
+    GenerateResult,
+    ModelDownloading,
+    ModelLoaded,
+    SourceReady,
+    Transcribed,
+    TranscriptionStarted,
+    Written,
+)
 from subsync.models import (
-    ComplianceReport,
     MediaSource,
     ProcessingConfig,
-    Subtitle,
     TranscriptionConfig,
     TranscriptionResult,
     VideoMetadata,
@@ -36,7 +46,7 @@ from subsync.processor import process_transcription
 from subsync.progress import ProgressMapper
 from subsync.transcriber import transcribe_audio
 from subsync.url_handler import parse_youtube_url
-from subsync.writer import render_srt, write_output
+from subsync.writer import RENDERERS, write_output
 
 logger = logging.getLogger(__name__)
 
@@ -153,116 +163,11 @@ def process_video(
 # =============================================================================
 
 
-@dataclass(frozen=True)
-class SourceReady:
-    """The source was read; its duration is known (stage 1F.2)."""
-
-    source: MediaSource
-
-
-@dataclass(frozen=True)
-class AudioExtracted:
-    """Audio was extracted to a temporary WAV (stage 1F.3)."""
-
-    seconds: float
-
-
-@dataclass(frozen=True)
-class ModelDownloading:
-    """The model is not cached, so loading it downloads it first (R7)."""
-
-    model_name: str
-
-
-@dataclass(frozen=True)
-class ModelLoaded:
-    """The model is loaded and ready (stage 2)."""
-
-    model_name: str
-    device: str
-    seconds: float
-
-
-@dataclass(frozen=True)
-class TranscriptionStarted:
-    """Transcription has started (stage 3)."""
-
-    audio_duration: float
-
-
-@dataclass(frozen=True)
-class Transcribed:
-    """Transcription finished and the language is known (stage 3)."""
-
-    seconds: float
-    language: str
-    language_detected: bool
-
-
-@dataclass(frozen=True)
-class Formatted:
-    """Segments were turned into compliant subtitles (stage 4)."""
-
-    segment_count: int
-    subtitle_count: int
-    seconds: float
-
-
-@dataclass(frozen=True)
-class Written:
-    """The subtitle file was written in one step (stage 5)."""
-
-    path: Path
-    seconds: float
-
-
-GenerateEvent = (
-    SourceReady
-    | AudioExtracted
-    | ModelDownloading
-    | ModelLoaded
-    | TranscriptionStarted
-    | Transcribed
-    | Formatted
-    | Written
-)
-"""A stage event reported by ``generate()`` for the CLI to render."""
-
-
-@dataclass
-class GenerateResult:
-    """What ``generate()`` produced.
-
-    Attributes:
-        path: Absolute path of the written subtitle file.
-        source: The source, with its duration filled in.
-        language: Language code used in the file name.
-        language_detected: True when the language was auto-detected.
-        model_name: Whisper model used.
-        device: Device label, e.g. "CPU".
-        subtitles: The written subtitles, in order.
-        report: The compliance report for those subtitles.
-        timings: Seconds spent per stage ("extract", "load", "transcribe",
-            "format", "write").
-    """
-
-    path: Path
-    source: MediaSource
-    language: str
-    language_detected: bool
-    model_name: str
-    device: str
-    subtitles: list[Subtitle]
-    report: ComplianceReport
-    timings: dict[str, float] = field(default_factory=lambda: {})
-
-
 def generate(
     source: MediaSource,
     transcription_config: TranscriptionConfig,
     processing_config: ProcessingConfig,
     plan: OutputPlan,
-    fmt: str,
     force: bool,
     on_event: Callable[[GenerateEvent], None] | None = None,
 ) -> GenerateResult:
@@ -280,7 +185,6 @@ def generate(
         transcription_config: Model, language (None to detect) and device.
         processing_config: Compliance limits for the subtitle processor.
         plan: The output plan from the pre-check.
-        fmt: Output format; ``"srt"`` in S1.
         force: Whether an existing output file may be replaced.
         on_event: Receives one event per stage.
 
@@ -297,10 +201,12 @@ def generate(
     """
     if source.kind != "file" or source.path is None:
         raise InputError("YouTube links aren't supported yet.")
-    if fmt != "srt":
-        raise InputError(f"Unsupported format '{fmt}'.")
+    render = RENDERERS.get(plan.fmt)
+    if render is None:
+        raise InputError(f"Unsupported format '{plan.fmt}'.")
 
     def emit(event: GenerateEvent) -> None:
+        """Report one stage event to the caller, if it asked for events."""
         if on_event is not None:
             on_event(event)
 
@@ -345,7 +251,7 @@ def generate(
 
     started = time.monotonic()
     path = plan.path_for(language)
-    write_output(render_srt(subtitles), path, force)
+    write_output(render(subtitles), path, force)
     timings["write"] = time.monotonic() - started
     emit(Written(path, timings["write"]))
 
