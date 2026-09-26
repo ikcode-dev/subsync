@@ -130,12 +130,12 @@ Existing call sites that pass only a message must keep working unchanged.
 
 ### Acceptance Criteria
 
-- [ ] `isinstance` relationships in the table hold; `except SubSyncError` still catches every SubSync error
-- [ ] `SubSyncError("x").hint is None`; `SubSyncError("x", hint="y").hint == "y"`; `str()` is the message
-- [ ] New models exist with the fields above; two `ComplianceReport` instances do not share a `flags` list
-- [ ] `SubtitleFile` has no `video_id`; `tests/test_models.py` updated
-- [ ] The invariant checker catches each violation class listed in the test scenarios
-- [ ] `uv run pytest` runs the existing 87 tests plus the new ones and skips `e2e`; `uv run ruff check .` passes
+- [x] `isinstance` relationships in the table hold; `except SubSyncError` still catches every SubSync error
+- [x] `SubSyncError("x").hint is None`; `SubSyncError("x", hint="y").hint == "y"`; `str()` is the message
+- [x] New models exist with the fields above; two `ComplianceReport` instances do not share a `flags` list
+- [x] `SubtitleFile` has no `video_id`; `tests/test_models.py` updated
+- [x] The invariant checker catches each violation class listed in the test scenarios
+- [x] `uv run pytest` runs the existing 87 tests plus the new ones and skips `e2e`; `uv run ruff check .` passes
 
 ### Test Scenarios
 
