@@ -4,7 +4,7 @@ Rules for writing and running tests. Project-wide rules are in the [root AGENTS.
 
 ## Conventions
 
-- pytest. One file per module: `tests/test_<module>.py` covers `src/subsync/<module>.py`. Most files group tests into `Test<Thing>` classes; follow the file you are in.
+- pytest. One file per module: `tests/test_<module>.py` covers `src/subsync/<module>.py`. Integration tests that drive a module end to end may add `tests/test_<module>_integration.py`, tests of a shared helper go in `tests/test_<helper>.py`, and opt-in end-to-end tests live in `tests/e2e/`. Most files group tests into `Test<Thing>` classes; follow the file you are in.
 - Write tests with every piece of logic, especially edge cases. Prefer unit tests for pure functions.
 - Tests are deterministic and make no network calls. yt-dlp and Whisper are replaced with `unittest.mock` stand-ins (`@patch("subsync.transcriber.whisper")`); the default run never downloads a model or a video.
 - Use pytest's `tmp_path` for files; never write into the repository.

@@ -26,6 +26,7 @@ from subsync import cli, media, pipeline
 from subsync.errors import ModelDownloadError, ModelMemoryError, TranscriptionError
 from subsync.models import (
     ComplianceReport,
+    ProcessingConfig,
     Subtitle,
     TranscriptionResult,
     TranscriptionSegment,
@@ -501,9 +502,9 @@ def test_structural_errors_change_only_the_headline(
     real = pipeline.process_transcription
 
     def broken(
-        result: TranscriptionResult, config: object = None
+        result: TranscriptionResult, config: ProcessingConfig | None = None
     ) -> tuple[list[Subtitle], ComplianceReport]:
-        subtitles, report = real(result, config)  # type: ignore[arg-type]
+        subtitles, report = real(result, config)
         report.errors.append("Subtitle 2 overlaps subtitle 1")
         report.is_compliant = False
         return subtitles, report

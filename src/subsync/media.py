@@ -215,7 +215,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:
     return subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
 
 
-def _kill_process_group(process: subprocess.Popen) -> None:
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
     """Kill the process group the child was started in, ignoring races."""
     try:
         pgid = os.getpgid(process.pid)
