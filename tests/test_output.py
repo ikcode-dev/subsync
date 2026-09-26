@@ -81,7 +81,8 @@ class TestPlanOutputNaming:
             plan_output(source, "out/", "srt", "en", force=False)
 
         assert not isinstance(exc_info.value, OutputExistsError)
-        assert "out/" in str(exc_info.value)
+        # S1.3-Q5: dropping the OS reason from the message must fail this.
+        assert str(exc_info.value) == "Can't write to out/: No such file or directory."
         assert not (tmp_path / "out").exists()
 
     def test_output_arg_exact_file_path_ignores_language(
@@ -210,6 +211,8 @@ class TestPlanOutputWritability:
             with pytest.raises(OutputError) as exc_info:
                 plan_output(source, str(readonly), "srt", "en", force=False)
             assert not isinstance(exc_info.value, OutputExistsError)
-            assert str(readonly) in str(exc_info.value)
+            # S1.3-Q5: dropping the OS reason from the message must fail this.
+            message = str(exc_info.value)
+            assert message == f"Can't write to {readonly}/: Permission denied."
         finally:
             readonly.chmod(0o700)
