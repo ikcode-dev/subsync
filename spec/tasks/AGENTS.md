@@ -59,7 +59,7 @@ Use for:
 
 ## File Naming
 
-Two layouts exist in this directory. Match the layout of the phase you are working in.
+Three layouts exist in this directory. Match the layout of the phase or slice you are working in.
 
 **Per-phase folder** with a README and numbered task files (used by phase 1):
 ```
@@ -76,6 +76,13 @@ spec/tasks/
 spec/tasks/
   phase-2-core-pipeline.tasks.md
 ```
+
+**Consolidated file per v1 slice** (used from SubSync v1 onward): the v1 slices S1–S5 cut across phases 3 and 4, so each slice gets one consolidated file, written one slice at a time. Its task sections reference the revised [phase 3](../plan/phase-3-netflix-compliance.md) and [phase 4](../plan/phase-4-cli-output.md) plans and the [implementation roadmap](../../docs/product-engineering/subsync-v1/implementation-roadmap.md):
+```
+spec/tasks/
+  slice-1-local-file-srt.tasks.md
+```
+Name them `slice-N-<slug>.tasks.md`.
 
 ## Structure Template
 
