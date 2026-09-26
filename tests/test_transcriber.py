@@ -194,6 +194,28 @@ class TestLoadModel:
         assert exc_info.value.hint == "An internet connection is needed once per model."
 
     @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=False)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_reason_ending_in_a_period_is_not_doubled(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q5: a reason that already ends in '.' must not get '..'."""
+        mock_whisper.load_model.side_effect = RuntimeError(
+            "Model has been downloaded but the SHA256 checksum does not "
+            "match. Please retry loading the model."
+        )
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            load_model(config)
+
+        assert ".." not in str(exc_info.value)
+        assert str(exc_info.value).endswith("Please retry loading the model.")
+
+    @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber.is_model_cached", return_value=True)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
     def test_cached_generic_failure_is_not_a_download_error(

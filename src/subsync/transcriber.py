@@ -143,6 +143,28 @@ def _is_out_of_memory(exc: Exception) -> bool:
     return isinstance(exc, RuntimeError) and "out of memory" in str(exc).lower()
 
 
+def _reason_text(exc: Exception) -> str:
+    """Render an exception as a single-line reason with no trailing period.
+
+    Takes the first non-blank line of ``str(exc)`` so a multi-line message
+    never spills the CLI's one-line error headline across lines, and
+    strips a trailing period so callers can append their own without
+    doubling it (Whisper's checksum-mismatch message already ends in one).
+
+    Args:
+        exc: The exception to render.
+
+    Returns:
+        A single-line reason string with no trailing period.
+    """
+    text = str(exc)
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped.rstrip(".")
+    return text.strip().rstrip(".")
+
+
 def _resolve_device(device: str) -> str:
     """Resolve the compute device for Whisper.
 
@@ -233,11 +255,12 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
                 ) from exc
             if not cached:
                 raise ModelDownloadError(
-                    f"Couldn't download model '{config.model_name}': {exc}.",
+                    f"Couldn't download model '{config.model_name}': "
+                    f"{_reason_text(exc)}.",
                     hint="An internet connection is needed once per model.",
                 ) from exc
             raise TranscriptionError(
-                f"Transcription failed: {exc}.",
+                f"Transcription failed: {_reason_text(exc)}.",
                 hint="Re-run with -v for details.",
             ) from exc
 
@@ -325,7 +348,7 @@ def transcribe_with_model(
                     hint="Try a smaller one: -m small",
                 ) from exc
             raise TranscriptionError(
-                f"Transcription failed: {exc}.",
+                f"Transcription failed: {_reason_text(exc)}.",
                 hint="Re-run with -v for details.",
             ) from exc
 
