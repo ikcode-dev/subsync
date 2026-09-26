@@ -6,6 +6,8 @@ code the CLI maps it to; see the error categories in
 ``spec/context/data-models.md``.
 """
 
+from typing import Self
+
 
 class SubSyncError(Exception):
     """Base exception for all SubSync errors.
@@ -131,7 +133,7 @@ class OutputExistsError(OutputError):
     """Output file already exists and ``--force`` was not given."""
 
     @classmethod
-    def for_file(cls, name: str) -> "OutputExistsError":
+    def for_file(cls, name: str) -> Self:
         """The F11 error for an existing output file.
 
         Args:

@@ -13,6 +13,7 @@ Update this list when you add, rename or retire a module.
 | `sources.py` | Resolves INPUT into a `MediaSource` (local file in S1; a YouTube URL gets the interim message until S4) |
 | `output.py` | Output naming (`-o`), the fail-fast pre-check for existing output, `OutputPlan` |
 | `media.py` | FFmpeg check, media probe (duration, no-audio, unreadable) and 16 kHz mono WAV extraction for local files |
+| `events.py` | Stage events and `GenerateResult` from `generate()`; imports no ML code, so the CLI renders events without the heavy import |
 | `pipeline.py` | `generate()`: one orchestrator from resolved source to written file, reporting stage events ([0007](../../decisions/0007-one-generate-orchestrator-with-mediasource.md)); `process_video()` is the Phase 2 URL pipeline, retired in S4 |
 | `transcriber.py` | Checks the Whisper cache, loads a model and transcribes with word-level timestamps, keeping Whisper's output off the terminal |
 | `processor.py` | Turns a `TranscriptionResult` into compliant `Subtitle`s (timing, splitting, line breaks, long words) and a `ComplianceReport` |

@@ -30,6 +30,7 @@ from subsync.models import (
     VideoMetadata,
     Word,
 )
+from subsync.events import GenerateEvent, GenerateResult
 from subsync.output import plan_output
 from subsync.pipeline import pipeline_temp_dir, process_video
 from subsync.sources import resolve_input
@@ -292,8 +293,8 @@ def _run_generate(
     *,
     language: str | None = None,
     force: bool = False,
-    events: list[pipeline.GenerateEvent] | None = None,
-) -> pipeline.GenerateResult:
+    events: list[GenerateEvent] | None = None,
+) -> GenerateResult:
     """Resolve, plan and generate for ``clip`` as the CLI would."""
     source = resolve_input(str(clip))
     plan = plan_output(source, None, "srt", language, force)
@@ -323,7 +324,7 @@ class TestGenerate:
         stand_in = StandInTranscriber(load_transcript(EPISODE_WITH_URL)).install(
             monkeypatch
         )
-        events: list[pipeline.GenerateEvent] = []
+        events: list[GenerateEvent] = []
 
         result = _run_generate(clip, events=events)
 
@@ -360,7 +361,7 @@ class TestGenerate:
         StandInTranscriber(load_transcript(EPISODE_WITH_URL), cached=False).install(
             monkeypatch
         )
-        events: list[pipeline.GenerateEvent] = []
+        events: list[GenerateEvent] = []
 
         _run_generate(clip, events=events)
 
