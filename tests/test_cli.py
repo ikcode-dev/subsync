@@ -358,6 +358,45 @@ class TestSeamSubSyncErrorTraceback:
         assert captured.err.index("Traceback") < captured.err.index("✗ Transcription")
 
 
+class TestVerboseLoggingIsolation:
+    """`-v` turns on DEBUG logging to stderr; without it, none appears.
+
+    Refs: S1.6-Q3, S1.6-Q5
+    """
+
+    def test_verbose_shows_debug_records(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"fake")
+
+        cli.main(["generate", str(video), "-v"])
+
+        captured = capsys.readouterr()
+        assert "DEBUG" in captured.err
+        assert logging.getLogger().level == logging.DEBUG
+
+    def test_root_level_is_restored_before_this_test(self) -> None:
+        """Proves `_isolate_root_logging` undoes the previous test's `-v`.
+
+        Depends on running after `test_verbose_shows_debug_records` above
+        (default, in-file pytest order); fails without the autouse fixture,
+        since `main` would otherwise leave the root logger at DEBUG.
+        """
+        assert logging.getLogger().level != logging.DEBUG
+
+    def test_without_verbose_no_debug_records(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"fake")
+
+        cli.main(["generate", str(video)])
+
+        captured = capsys.readouterr()
+        assert "DEBUG" not in captured.err
+
+
 # Scenario 13
 class TestFastStartup:
     """Running a stage 0/1 failure must not import the ML stack."""
