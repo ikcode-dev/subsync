@@ -119,25 +119,31 @@ def run_generate(args: argparse.Namespace) -> int:
     """Run `subsync generate`.
 
     This is the seam task S1.7 fills in. As of slice S1.6 it covers stage 0
-    (`-l`/`-m` validation) and stage 1 (input resolution), then stops.
+    (`-l`/`-m` validation) and stage 1 (input resolution), then stops by
+    raising: there is no writer wired up yet, so a "successful" run here
+    would silently write nothing, which would contradict decision 0009
+    (exit 0 means a file was written).
 
     S1.7 will:
     - add the `-o`/`-f` consistency check (F4) and the FFmpeg check (F6) to
       stage 0, before input resolution;
     - use the resolved `MediaSource` to run the output pre-check, audio
       extraction, transcription, subtitle processing and the write, render
-      the stage lines and summary, and return the final exit code.
+      the stage lines and summary, and return the final exit code, in
+      place of the `raise` below.
 
     Args:
         args: Parsed arguments from the `generate` subcommand (`input`,
             `language`, `model`, `format`, `output`, `force`, `verbose`).
 
     Returns:
-        The process exit code.
+        The process exit code. (Never returns in S1.6; see above.)
 
     Raises:
         SubSyncError: Any stage 0/1 validation failure (F2, F3, F7, F8, or
-            the interim YouTube-URL message).
+            the interim YouTube-URL message), or, once input resolves, the
+            S1.6 stub error marking the rest of the pipeline as not yet
+            wired up.
     """
     _validate_language(args.language)
     _validate_model(args.model)
@@ -145,7 +151,11 @@ def run_generate(args: argparse.Namespace) -> int:
     resolve_input(args.input)
 
     # --- S1.7 continues from here (see the docstring above). ---
-    return 0
+    raise SubSyncError(
+        "generate is not wired up yet.",
+        hint="This lands in S1.7; the seam only validates arguments and "
+        "resolves input for now.",
+    )
 
 
 def _summarize(exc: BaseException) -> str:
