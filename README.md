@@ -102,6 +102,8 @@ src/
 
 tests/            # Test suite
 
+decisions/        # Decision records, indexed in decisions/README.md
+
 docs/
 ├── product-design/       # Product brief, UX flows, handoff (v1)
 ├── product-engineering/  # Implementation roadmap (v1)
@@ -216,6 +218,8 @@ We follow Spec-Driven Development:
 4. **Implement** — Write code that meets the task's acceptance criteria
 5. **Test** — Ensure all tests pass and linting is clean
 6. **Submit PR** — Reference the task and plan in your pull request
+
+Decisions that shape the project, and why they were made, are indexed in [decisions/README.md](decisions/README.md).
 
 Questions? Check [AGENTS.md](AGENTS.md) for detailed coding conventions and architecture patterns.
 

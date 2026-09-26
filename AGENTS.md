@@ -59,6 +59,10 @@ Workflow: context → plan → tasks → implementation. When implementing a tas
 
 Each `spec/` subdirectory has its own `AGENTS.md` with authoring rules for that kind of document.
 
+## Decisions
+
+Decisions that shape this project are recorded in [decisions/README.md](decisions/README.md). Read the index before changing structure, conventions, or dependencies. Record new decisions as a new numbered file; never edit an accepted record, supersede it.
+
 ## Coding Conventions
 
 - Favor pragmatic, readable code over clever abstractions — simplicity wins
