@@ -1,3 +1,7 @@
 .venv/
 __pycache__/
 .pytest_cache/
+
+# Local Claude Code state
+.claude/settings.local.json
+.claude/worktrees/
