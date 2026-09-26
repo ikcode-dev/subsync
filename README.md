@@ -1,12 +1,12 @@
 # SubSync
 
-SubSync is a CLI application written in Python that generates Netflix-compliant subtitles for YouTube videos. It uses local AI models to transcribe audio and will support translation to other languages in the future.
+SubSync is a CLI application written in Python that generates Netflix-compliant subtitles for YouTube videos, from a local video file (such as a private draft before upload) or a YouTube URL. It uses local AI models to transcribe audio and will support translation to other languages in the future.
 
 The main goal of SubSync is to quickly prepare professional-quality subtitles and their translations for YouTube videos.
 
 ## About This Project
 
-SubSync is being developed following the [Subtitle Generation Algorithm](docs/SUBTITLE_GENERATION_ALGORITHM.md), which defines the complete technical specification for generating Netflix-compliant subtitles from YouTube videos. The algorithm covers:
+The current source of truth for SubSync v1 is the agreed [product brief](docs/product-design/subsync-v1/product-brief.md) (with its [UX flows](docs/product-design/subsync-v1/ux-flows.md)) and the [implementation roadmap](docs/product-engineering/subsync-v1/implementation-roadmap.md), which delivers v1 in slices S1–S5. The [Subtitle Generation Algorithm](docs/SUBTITLE_GENERATION_ALGORITHM.md) is background material. It covers:
 
 - YouTube URL validation and audio extraction
 - AI-powered speech transcription using OpenAI Whisper
@@ -102,15 +102,17 @@ src/
 
 tests/            # Test suite
 
-docs/             # Algorithm documentation
-└── SUBTITLE_GENERATION_ALGORITHM.md  # Detailed technical spec
+docs/
+├── product-design/       # Product brief, UX flows, handoff (v1)
+├── product-engineering/  # Implementation roadmap (v1)
+└── SUBTITLE_GENERATION_ALGORITHM.md  # Background technical design
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-To run SubSync, you need Python 3.13+ and `uv` installed.
+To run SubSync, you need Python 3.13+, `uv` and FFmpeg installed.
 
 #### Python
 
@@ -142,6 +144,20 @@ Restart your terminal to make `uv` and `uvx` available:
 source ~/.zshrc  # or ~/.bashrc for Bash
 ```
 
+#### FFmpeg
+
+SubSync uses FFmpeg (`ffmpeg` and `ffprobe`) to read media files and extract audio. Check that it is installed:
+
+```shell
+ffmpeg -version
+```
+
+Install it on macOS with Homebrew if needed:
+
+```shell
+brew install ffmpeg
+```
+
 ### Installation
 
 Install project dependencies:
@@ -158,7 +174,7 @@ uv sync
 
 ### Running the Application
 
-Run the CLI:
+Usage instructions for `subsync generate` land here when the CLI ships (slice S1 makes it usable; slice S5 documents it). Until then, run the CLI with:
 
 ```shell
 task run

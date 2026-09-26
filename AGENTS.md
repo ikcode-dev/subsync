@@ -4,14 +4,15 @@ Guidance for coding agents working in this repository.
 
 ## Project
 
-SubSync is a Python CLI tool that generates Netflix-compliant subtitles for YouTube videos using local AI (OpenAI Whisper). Translation to other languages is planned. Entry point: `subsync.cli:main`.
+SubSync is a Python CLI tool that turns a local video file or a YouTube video into a Netflix-compliant subtitle file, using local AI (OpenAI Whisper). Translation to other languages is the next increment after v1. Entry point: `subsync.cli:main`.
 
 - **Language**: Python 3.13+
 - **Package manager / build**: uv, uv_build
 - **Testing**: pytest
 - **Linting / formatting**: ruff
 - **Task runner**: Taskfile
-- **Key dependencies**: `yt-dlp` (audio extraction), `openai-whisper` (transcription), `rich` (terminal output)
+- **Key dependencies**: `yt-dlp` (YouTube audio download), `openai-whisper` (transcription), `rich` (terminal output)
+- **System dependency**: FFmpeg (`ffmpeg` and `ffprobe`) must be on PATH (`brew install ffmpeg`)
 
 ## Commands
 
@@ -30,11 +31,11 @@ SubSync is a Python CLI tool that generates Netflix-compliant subtitles for YouT
 
 ## Architecture
 
-Pipeline: URL Handler → Audio Extractor → Transcriber → Subtitle Processor → Writer
+Pipeline: Input (local file or YouTube URL) → audio (FFmpeg extraction or yt-dlp download) → Transcriber → Subtitle Processor → Writer
 
-Subtitle output follows the Netflix Timed Text Style Guide. SRT is the primary format; VTT is also supported.
+Subtitle output follows the Netflix Timed Text Style Guide. SRT is the primary format; VTT is optional (planned for slice S5).
 
-Source is in `src/subsync/`, tests in `tests/`. Phases 1 (foundation) and 2 (core pipeline) are complete; Phase 3 (Netflix compliance) is next, followed by Phase 4 (CLI and output).
+Source is in `src/subsync/`, tests in `tests/`. Phases 1 (foundation) and 2 (core pipeline) are merged. v1 is delivered in vertical slices S1–S5 that cut across Phase 3 (Netflix compliance) and Phase 4 (CLI and output); see the [implementation roadmap](docs/product-engineering/subsync-v1/implementation-roadmap.md). The product/design source of truth (brief, UX flows, handoff) is [`docs/product-design/subsync-v1/`](docs/product-design/subsync-v1/index.md).
 
 Key modules:
 - `url_handler.py` — Parses YouTube URLs, extracts 11-char video IDs
@@ -52,7 +53,7 @@ The `spec/` directory defines **what** to build and **why**, never **how**. Impl
 
 - `spec/context/` — Domain knowledge, constraints (Netflix compliance rules, YouTube URL formats, dependencies)
 - `spec/plan/` — Phase-level architecture and strategy (phases 1–4)
-- `spec/tasks/` — Atomic work units with acceptance criteria and test scenarios
+- `spec/tasks/` — Atomic work units with acceptance criteria and test scenarios (per phase for phases 1–2, per slice for v1)
 
 Workflow: context → plan → tasks → implementation. When implementing a task, read its spec file first — it contains all requirements, acceptance criteria, and test scenarios. Mark its acceptance criteria as done once they are verified.
 
