@@ -108,14 +108,20 @@ class TestNeitherFileNorUrl:
         with pytest.raises(InputError, match="not a file or a supported YouTube URL"):
             resolve_input("https://vimeo.com/12345")
 
-    def test_existing_file_wins_over_url_parsing(self, tmp_path: Path) -> None:
-        """A path that happens to also look URL-ish, but exists, is a file."""
-        # A file whose exact name matches nothing YouTube-ish; this test
-        # instead proves the *order* of checks: file existence is checked
-        # before URL parsing is ever attempted.
-        video = tmp_path / "https:.mov"
-        video.write_bytes(b"fake")
+    def test_existing_file_wins_over_url_parsing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A path that *is* a valid YouTube URL, but also exists, is a file.
 
-        source = resolve_input(str(video))
+        Refs: S1.6-Q2
+        """
+        # A relative "https://youtu.be/dQw4w9WgXcQ" resolves (via pathlib's
+        # slash collapsing) to the file tmp_path/https:/youtu.be/dQw4w9WgXcQ.
+        video = tmp_path / "https:" / "youtu.be" / "dQw4w9WgXcQ"
+        video.parent.mkdir(parents=True)
+        video.write_bytes(b"fake")
+        monkeypatch.chdir(tmp_path)
+
+        source = resolve_input("https://youtu.be/dQw4w9WgXcQ")
 
         assert source.kind == "file"
