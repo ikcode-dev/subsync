@@ -10,6 +10,7 @@ exclusive reservation followed by a replace, during which the final name
 is briefly visible as an empty file.
 """
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -22,7 +23,6 @@ from subsync.models import Subtitle
 logger = logging.getLogger(__name__)
 
 _MILLISECOND = timedelta(milliseconds=1)
-_EXISTS_HINT = "Re-run with --force to replace it, or choose another path with -o."
 
 # Short and fixed-length on purpose: unlike a prefix built from the final
 # name, this never pushes a legal final name (up to 255 bytes) over a
@@ -61,7 +61,7 @@ def render_srt(subtitles: list[Subtitle]) -> str:
     Returns:
         The rendered SRT text, or ``""`` for an empty list.
     """
-    blocks = []
+    blocks: list[str] = []
     for position, subtitle in enumerate(subtitles, start=1):
         timing = (
             f"{_format_timestamp(subtitle.start_time)} --> "
@@ -123,17 +123,17 @@ def write_output(content: str, path: Path, force: bool) -> None:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
+            # On the descriptor, not the name: a swapped-in symlink can't
+            # redirect the permission change to another file.
+            os.fchmod(handle.fileno(), mode)
             os.fsync(handle.fileno())
-        os.chmod(tmp_path, mode)
 
         if force:
             os.replace(tmp_path, path)
         else:
             _publish_no_clobber(tmp_path, path, mode)
     except FileExistsError as exc:
-        raise OutputExistsError(
-            f"{path.name} already exists.", hint=_EXISTS_HINT
-        ) from exc
+        raise OutputExistsError.for_file(path.name) from exc
     except OSError as exc:
         reason = exc.strerror or str(exc)
         logger.debug("write to %s failed: %s", path, exc)
@@ -142,10 +142,8 @@ def write_output(content: str, path: Path, force: bool) -> None:
         # Covers every exit: success (nothing left to remove), a mapped
         # error, and a bare KeyboardInterrupt at any point above.
         if tmp_name is not None:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp_name)
-            except FileNotFoundError:
-                pass
 
 
 def _publish_no_clobber(tmp_path: Path, path: Path, mode: int) -> None:
@@ -168,7 +166,7 @@ def _publish_no_clobber(tmp_path: Path, path: Path, mode: int) -> None:
         OSError: The fallback publish failed for another reason.
     """
     try:
-        os.link(tmp_path, path)
+        os.link(tmp_path, path, follow_symlinks=False)
     except FileExistsError:
         raise
     except OSError as exc:

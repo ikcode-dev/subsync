@@ -95,6 +95,40 @@ class TestRenderSrt:
 class TestWriteOutput:
     """R17: one-step write, no-clobber without --force, no partial file ever."""
 
+    def test_temp_swapped_for_a_symlink_redirects_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A co-user swapping the temp file for a symlink can't widen the
+        permissions of, or publish, another file of the user's."""
+        victim = tmp_path / "private" / "id_ed25519"
+        victim.parent.mkdir()
+        victim.write_text("SECRET\n", encoding="utf-8")
+        victim.chmod(0o600)
+        out_dir = tmp_path / "shared"
+        out_dir.mkdir()
+        real_fsync = os.fsync
+
+        def fsync_then_swap(fd: int) -> None:
+            real_fsync(fd)
+            for temp in out_dir.glob(".subsync-*.tmp"):
+                temp.unlink()
+                temp.symlink_to(victim)
+
+        monkeypatch.setattr(os, "fsync", fsync_then_swap)
+
+        path = out_dir / "ep42.en.srt"
+        try:
+            write_output("content\n", path, force=False)
+        except OutputError:
+            pass
+
+        assert stat.S_IMODE(victim.stat().st_mode) == 0o600
+        # Never hard-linked into the shared folder: at most the attacker's own
+        # symlink is published under the name.
+        assert victim.stat().st_nlink == 1
+        if path.exists():
+            assert path.lstat().st_ino != victim.stat().st_ino
+
     def test_writes_new_file(self, tmp_path: Path) -> None:
         path = tmp_path / "ep42.en.srt"
 
