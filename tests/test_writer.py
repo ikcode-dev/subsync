@@ -304,3 +304,42 @@ class TestWriteOutput:
             write_output("content", path, force=False)
 
         assert list(tmp_path.iterdir()) == []
+
+    def test_reservation_replace_oserror_leaves_no_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # S1.3-Q7: exercise the reservation's own cleanup branch, not just
+        # the hard-link path.
+        def link_boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+
+        def replace_boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.EIO, "Input/output error")
+
+        monkeypatch.setattr(os, "link", link_boom)
+        monkeypatch.setattr(os, "replace", replace_boom)
+        path = tmp_path / "ep42.en.srt"
+
+        with pytest.raises(OutputError) as exc_info:
+            write_output("content", path, force=False)
+
+        assert not isinstance(exc_info.value, OutputExistsError)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_reservation_replace_keyboard_interrupt_leaves_no_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def link_boom(*_args: object, **_kwargs: object) -> None:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+
+        def replace_boom(*_args: object, **_kwargs: object) -> None:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(os, "link", link_boom)
+        monkeypatch.setattr(os, "replace", replace_boom)
+        path = tmp_path / "ep42.en.srt"
+
+        with pytest.raises(KeyboardInterrupt):
+            write_output("content", path, force=False)
+
+        assert list(tmp_path.iterdir()) == []
