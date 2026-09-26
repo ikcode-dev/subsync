@@ -520,6 +520,54 @@ def test_structural_errors_change_only_the_headline(
     assert (videos / "tone.en.srt").exists()
 
 
+def test_clean_run_has_the_plain_headline(
+    tone: Path,
+    run_tmpdir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """P2: no warnings, so no review count and no review list."""
+    clean = TranscriptionResult(
+        language="en",
+        duration=6.0,
+        segments=[
+            TranscriptionSegment(
+                id=0,
+                start=0.0,
+                end=2.0,
+                text=" Hello and welcome back.",
+                words=[
+                    Word(word=" Hello", start=0.0, end=0.5),
+                    Word(word=" and", start=0.5, end=0.8),
+                    Word(word=" welcome", start=0.8, end=1.4),
+                    Word(word=" back.", start=1.4, end=2.0),
+                ],
+            ),
+            TranscriptionSegment(
+                id=1,
+                start=3.0,
+                end=5.0,
+                text=" This run needs no review.",
+                words=[
+                    Word(word=" This", start=3.0, end=3.3),
+                    Word(word=" run", start=3.3, end=3.6),
+                    Word(word=" needs", start=3.6, end=4.0),
+                    Word(word=" no", start=4.0, end=4.3),
+                    Word(word=" review.", start=4.3, end=5.0),
+                ],
+            ),
+        ],
+    )
+    StandInTranscriber(clean).install(monkeypatch)
+
+    rc, out, _ = run(["generate", str(tone)], capsys)
+
+    assert rc == 0
+    assert out.splitlines()[0] == "✓ Subtitles written"
+    assert "To review:" not in out
+    assert "  Subtitles: 2" in out
+
+
 # I15
 @pytest.mark.parametrize("verbose", [False, True], ids=["plain", "-v"])
 def test_unexpected_error(
