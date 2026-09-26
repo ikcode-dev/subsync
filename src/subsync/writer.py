@@ -105,7 +105,10 @@ def write_output(content: str, path: Path, force: bool) -> None:
     data = content.encode("utf-8")
     mode = _default_file_mode()
 
-    tmp_path: Path | None = None
+    # Recorded as a plain string, in the same statement mkstemp returns it
+    # in, so cleanup never depends on a later statement (not even
+    # ``Path(tmp_name)``) having run before an interrupt lands.
+    tmp_name: str | None = None
     try:
         fd, tmp_name = tempfile.mkstemp(
             dir=path.parent, prefix=_TEMP_PREFIX, suffix=_TEMP_SUFFIX
@@ -132,8 +135,11 @@ def write_output(content: str, path: Path, force: bool) -> None:
     finally:
         # Covers every exit: success (nothing left to remove), a mapped
         # error, and a bare KeyboardInterrupt at any point above.
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+        if tmp_name is not None:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
 
 
 def _publish_no_clobber(tmp_path: Path, path: Path, mode: int) -> None:

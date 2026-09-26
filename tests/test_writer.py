@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from srt_invariants import assert_valid_srt
 
+import subsync.writer as writer_module
 from subsync.errors import OutputError, OutputExistsError
 from subsync.models import Subtitle
 from subsync.writer import render_srt, write_output
@@ -256,3 +257,26 @@ class TestWriteOutput:
         assert str(exc_info.value) == "ep42.en.srt already exists."
         assert path.read_bytes() == b"original"
         assert [entry.name for entry in tmp_path.iterdir()] == ["ep42.en.srt"]
+
+    def test_keyboard_interrupt_right_after_mkstemp_leaves_no_temp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # S1.3-Q2: the temp file exists before tmp_path = Path(tmp_name)
+        # runs; an interrupt right there must not skip cleanup. Wrap Path
+        # so the *second* call (the one converting tmp_name) raises.
+        real_path = writer_module.Path
+        calls = {"count": 0}
+
+        def counting_path(*args: object, **kwargs: object) -> Path:
+            calls["count"] += 1
+            if calls["count"] == 2:
+                raise KeyboardInterrupt
+            return real_path(*args, **kwargs)
+
+        monkeypatch.setattr(writer_module, "Path", counting_path)
+        path = tmp_path / "ep42.en.srt"
+
+        with pytest.raises(KeyboardInterrupt):
+            write_output("content", path, force=False)
+
+        assert list(tmp_path.iterdir()) == []
