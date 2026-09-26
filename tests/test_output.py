@@ -199,6 +199,26 @@ class TestPlanOutputPreCheck:
 class TestPlanOutputWritability:
     """F12: a folder that can't be written to fails before any work starts."""
 
+    def test_unlistable_folder_fails_the_auto_language_check(
+        self, tmp_path: Path
+    ) -> None:
+        """U1 can't be honoured without a listing, so it fails as F12."""
+        if hasattr(os, "getuid") and os.getuid() == 0:
+            pytest.skip("running as root bypasses folder permissions")
+        folder = tmp_path / "out"
+        folder.mkdir()
+        (folder / "ep42.en.srt").write_text("1\n", encoding="utf-8")
+        folder.chmod(0o300)
+
+        try:
+            with pytest.raises(OutputError) as exc_info:
+                plan_output(_source(tmp_path), f"{folder}/", "srt", None, force=False)
+            assert str(exc_info.value) == (
+                f"Can't write to {folder}/: Permission denied."
+            )
+        finally:
+            folder.chmod(0o700)
+
     def test_read_only_folder_raises_with_os_reason(self, tmp_path: Path) -> None:
         if hasattr(os, "getuid") and os.getuid() == 0:
             pytest.skip("running as root bypasses folder permissions")

@@ -25,7 +25,6 @@ from subsync.models import MediaSource
 logger = logging.getLogger(__name__)
 
 _FORMAT_EXTENSIONS = (".srt", ".vtt")
-_EXISTS_HINT = "Re-run with --force to replace it, or choose another path with -o."
 
 
 def check_output_args(output_arg: str | None, fmt: str) -> None:
@@ -136,15 +135,11 @@ def plan_output(
     if not force:
         if exact_path is not None:
             if exact_path.exists():
-                raise OutputExistsError(
-                    f"{exact_path.name} already exists.", hint=_EXISTS_HINT
-                )
+                raise OutputExistsError.for_file(exact_path.name)
         else:
-            conflict = _auto_language_conflict(directory, stem, fmt)
+            conflict = _auto_language_conflict(directory, stem, fmt, folder_display)
             if conflict is not None:
-                raise OutputExistsError(
-                    f"{conflict} already exists.", hint=_EXISTS_HINT
-                )
+                raise OutputExistsError.for_file(conflict)
 
     return OutputPlan(directory=directory, exact_path=exact_path, stem=stem, fmt=fmt)
 
@@ -210,7 +205,9 @@ def _check_writable(directory: Path, display: str) -> None:
         raise OutputError(f"Can't write to {display}: {reason}.") from exc
 
 
-def _auto_language_conflict(directory: Path, stem: str, fmt: str) -> str | None:
+def _auto_language_conflict(
+    directory: Path, stem: str, fmt: str, display: str
+) -> str | None:
     """Return the name of an existing ``<stem>.<something>.<fmt>`` file, if any.
 
     Matches literally: ``stem`` is compared as plain text, never as a glob
@@ -221,16 +218,23 @@ def _auto_language_conflict(directory: Path, stem: str, fmt: str) -> str | None:
         directory: The absolute folder to scan.
         stem: The literal stem to match at the start of the name.
         fmt: The extension to match at the end of the name.
+        display: How to name the folder in the error message.
 
     Returns:
         The first conflicting file name found, or ``None``.
+
+    Raises:
+        OutputError: The folder can't be listed (F12).
     """
     prefix = f"{stem}."
     suffix = f".{fmt}"
     try:
         names = sorted(entry.name for entry in directory.iterdir() if entry.is_file())
-    except OSError:
-        return None
+    except OSError as exc:
+        # Without a listing, U1 can't be honoured: say so before any work.
+        reason = exc.strerror or str(exc)
+        logger.debug("output folder %s can't be listed: %s", directory, exc)
+        raise OutputError(f"Can't write to {display}: {reason}.") from exc
     for name in names:
         if not name.startswith(prefix) or not name.endswith(suffix):
             continue
