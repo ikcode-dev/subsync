@@ -284,6 +284,34 @@ class TestLoadModel:
     @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber.is_model_cached", return_value=True)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_cached_permission_error_is_not_a_download_error(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """S1.5-Q8: a cached model's unrelated OSError is not a download failure.
+
+        socket.error is an alias of OSError, so including it in the
+        download-exception tuple made ANY OSError while loading a cached
+        model (e.g. a permission error on the weight file) look like a
+        failed download, even though no network activity was involved.
+        """
+        mock_whisper.load_model.side_effect = PermissionError(
+            13, "Permission denied", "/cache/whisper/large-v3-turbo.pt"
+        )
+        config = TranscriptionConfig(model_name="turbo")
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            load_model(config)
+
+        assert not isinstance(exc_info.value, ModelDownloadError)
+        assert str(exc_info.value).startswith("Couldn't load model 'turbo':")
+        assert exc_info.value.hint == "Re-run with -v for details."
+
+    @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
     def test_runtime_out_of_memory_raises_model_memory_error(
         self,
         mock_device: MagicMock,

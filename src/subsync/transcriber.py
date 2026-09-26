@@ -13,7 +13,6 @@ retired.
 import contextlib
 import logging
 import os
-import socket
 import threading
 import warnings
 from collections.abc import Callable, Iterator
@@ -36,17 +35,18 @@ from subsync.models import (
 logger = logging.getLogger(__name__)
 
 # Exception types that indicate a failed (or interrupted) network fetch of
-# model weights, regardless of what is_model_cached() reported. socket.error
-# is an alias for OSError; URLError (and its subclass HTTPError) and the
-# builtin ConnectionError/TimeoutError are all OSError subclasses too, so
-# this in practice covers any OSError raised while fetching, plus the
-# protocol-level http.client.HTTPException.
+# model weights, regardless of what is_model_cached() reported. URLError
+# (and its subclass HTTPError), ConnectionError and TimeoutError are all
+# OSError subclasses, but deliberately named individually rather than as a
+# blanket `OSError` check: a cached model can fail to load for an OSError
+# reason that has nothing to do with the network (e.g. a permission error
+# on the weight file), and that must stay a generic load failure, not a
+# download error.
 _DOWNLOAD_EXCEPTION_TYPES = (
     URLError,
     HTTPException,
     ConnectionError,
     TimeoutError,
-    socket.error,
 )
 
 # Whisper caches weights under the basename of each model's download URL
