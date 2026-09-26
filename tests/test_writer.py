@@ -3,6 +3,7 @@
 import errno
 import os
 import stat
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -167,3 +168,32 @@ class TestWriteOutput:
 
         assert stat.S_IMODE(path.stat().st_mode) == stat.S_IMODE(normal.stat().st_mode)
         assert stat.S_IMODE(path.stat().st_mode) != 0o600
+
+    def test_target_folder_missing_raises_output_error(self, tmp_path: Path) -> None:
+        # S1.3-Q2: mkstemp itself can fail (folder removed after planning,
+        # ENOSPC, ENAMETOOLONG); that must become OutputError, not a raw
+        # OSError, and must leave nothing behind.
+        path = tmp_path / "gone" / "ep42.en.srt"
+
+        with pytest.raises(OutputError) as exc_info:
+            write_output("content", path, force=False)
+
+        assert not isinstance(exc_info.value, OutputExistsError)
+        assert "ep42.en.srt" in str(exc_info.value)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_mkstemp_failure_raises_output_error_and_leaves_no_temp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def boom(*_args: object, **_kwargs: object) -> tuple[int, str]:
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+        monkeypatch.setattr(tempfile, "mkstemp", boom)
+        path = tmp_path / "ep42.en.srt"
+
+        with pytest.raises(OutputError) as exc_info:
+            write_output("content", path, force=False)
+
+        assert not isinstance(exc_info.value, OutputExistsError)
+        assert "No space left on device" in str(exc_info.value)
+        assert list(tmp_path.iterdir()) == []

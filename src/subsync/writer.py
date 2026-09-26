@@ -98,11 +98,12 @@ def write_output(content: str, path: Path, force: bool) -> None:
     path = Path(path)
     data = content.encode("utf-8")
 
-    fd, tmp_name = tempfile.mkstemp(
-        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
-    )
-    tmp_path = Path(tmp_name)
+    tmp_path: Path | None = None
     try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+        )
+        tmp_path = Path(tmp_name)
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
@@ -126,4 +127,5 @@ def write_output(content: str, path: Path, force: bool) -> None:
     finally:
         # os.link leaves the temporary file behind on success; every other
         # path (including a bare KeyboardInterrupt) leaves it behind too.
-        tmp_path.unlink(missing_ok=True)
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
