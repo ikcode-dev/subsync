@@ -307,6 +307,57 @@ class TestSeamUnexpectedException:
         assert captured.err.index("Traceback") < captured.err.index("✗ Something")
 
 
+class TestSeamSubSyncErrorTraceback:
+    """`-v` also prints a `SubSyncError`'s traceback, including its cause.
+
+    R20, and F21's "Re-run with -v for details" hint, depend on `-v`
+    surfacing the underlying failure for a chained `SubSyncError` (e.g.
+    S1.5's `raise TranscriptionError(...) from exc`), not only for the
+    catch-all F25 branch.
+
+    Refs: S1.6-Q1
+    """
+
+    @staticmethod
+    def _raise_chained(args: object) -> int:
+        try:
+            raise ValueError("underlying decode failure")
+        except ValueError as exc:
+            raise TranscriptionError(
+                "Transcription failed: underlying decode failure.",
+                hint="Re-run with -v for details.",
+            ) from exc
+
+    def test_no_traceback_without_verbose(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(cli, "run_generate", self._raise_chained)
+
+        rc = cli.main(["generate", "input"])
+
+        captured = capsys.readouterr()
+        assert rc == 4
+        assert captured.out == ""
+        assert "Traceback" not in captured.err
+        assert "✗ Transcription failed: underlying decode failure." in captured.err
+
+    def test_traceback_and_cause_with_verbose(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(cli, "run_generate", self._raise_chained)
+
+        rc = cli.main(["generate", "input", "-v"])
+
+        captured = capsys.readouterr()
+        assert rc == 4
+        assert captured.out == ""
+        assert "Traceback" in captured.err
+        assert "underlying decode failure" in captured.err
+        assert "✗ Transcription failed: underlying decode failure." in captured.err
+        # The traceback (and its chained cause) come before the ✗ block.
+        assert captured.err.index("Traceback") < captured.err.index("✗ Transcription")
+
+
 # Scenario 13
 class TestFastStartup:
     """Running a stage 0/1 failure must not import the ML stack."""
