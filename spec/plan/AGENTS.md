@@ -10,7 +10,7 @@ Plan files answer: **"What are we building, and what's our approach?"**
 
 ✅ **Include:**
 - Goals and objectives for the feature/phase
-- Architecture decisions with rationale
+- Architecture decisions with rationale that are local to this phase. A decision that outlives the phase or slice gets a record in [`decisions/`](../../decisions/README.md); the plan links it instead of restating it
 - Component breakdown and responsibilities
 - Integration points between components
 - Data flow descriptions
@@ -39,53 +39,7 @@ Use descriptive names that identify the feature or phase:
 
 ## Structure Template
 
-````markdown
-# [Feature/Phase Name]
-
-## Overview
-What this feature/phase accomplishes and why it's needed.
-
-## Goals
-- Goal 1
-- Goal 2
-
-## Architecture
-
-### Components
-Describe the main components and their responsibilities.
-
-### Data Flow
-Explain how data moves through the system.
-
-```mermaid
-flowchart LR
-    A[Input] --> B[Process] --> C[Output]
-```
-
-## Interface Definitions
-
-### Inputs
-- What the feature receives
-
-### Outputs
-- What the feature produces
-
-## Error Handling
-What error conditions exist and how they should be communicated.
-
-## Risks & Mitigations
-| Risk | Mitigation |
-|------|------------|
-| Risk 1 | How to address it |
-
-## Dependencies
-- Links to relevant context files
-- External dependencies
-
-## Acceptance Criteria
-- [ ] Criterion 1
-- [ ] Criterion 2
-````
+When creating a plan file, copy [`spec/templates/plan.md`](../templates/plan.md).
 
 ## Principles
 

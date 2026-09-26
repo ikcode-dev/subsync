@@ -13,7 +13,7 @@ Context files answer: **"What do we know, and why does it matter?"**
 - External documentation references and summaries
 - Technical constraints (platform limitations, compliance requirements)
 - Research findings from investigating technologies or approaches
-- Decisions already made and their rationale
+- Constraints that follow from decisions already made (link the record in [`decisions/`](../../decisions/README.md) rather than restating its reasoning)
 - Links to authoritative sources (official docs, standards, RFCs)
 
 ❌ **Do NOT include:**
@@ -30,25 +30,7 @@ Use descriptive, kebab-case names that identify the domain area:
 
 ## Structure Template
 
-```markdown
-# [Topic Name]
-
-## Overview
-Brief description of what this context covers and why it matters.
-
-## Key Concepts
-Define important terms and concepts.
-
-## Constraints
-List any limitations or requirements that must be respected.
-
-## References
-- [Link to official documentation](url)
-- [Link to relevant standard](url)
-
-## Notes
-Any additional observations or findings.
-```
+When creating a context file, copy [`spec/templates/context.md`](../templates/context.md).
 
 ## Maintenance
 

@@ -9,8 +9,15 @@ The `spec/` directory contains the **specification** for the project—defining 
 | `spec/context/` | Domain knowledge, constraints, research, external references |
 | `spec/plan/` | Feature/phase implementation strategies and architecture |
 | `spec/tasks/` | Atomic, verifiable work units with acceptance criteria |
+| `spec/templates/` | Starter files for new context, plan and task documents |
 
-Each subdirectory has its own `AGENTS.md` with file-specific rules and templates.
+Each of `context/`, `plan/` and `tasks/` has its own `AGENTS.md` with file-specific rules. Read it before writing in that directory; open a template only when creating a new file.
+
+## Where Specs Sit
+
+- **Product intent** comes first: the agreed documents in [`docs/product-design/`](../docs/product-design/subsync-v1/index.md) say what SubSync must do for the user. Specs turn that into a technical baseline; when they disagree, the product documents win and the spec is revised.
+- **Delivery order** lives in the [implementation roadmap](../docs/product-engineering/subsync-v1/implementation-roadmap.md), not in specs.
+- **Cross-cutting decisions** that outlive a phase or slice are recorded in [`decisions/`](../decisions/README.md). Specs link the record rather than restate its reasoning.
 
 ## Core Principle
 
