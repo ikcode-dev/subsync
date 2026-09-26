@@ -129,3 +129,39 @@ class OutputError(SubSyncError):
 
 class OutputExistsError(OutputError):
     """Output file already exists and ``--force`` was not given."""
+
+    @classmethod
+    def for_file(cls, name: str) -> "OutputExistsError":
+        """The F11 error for an existing output file.
+
+        Args:
+            name: The existing file's name, e.g. ``ep42.en.srt``.
+
+        Returns:
+            The error, with the ``--force`` / ``-o`` hint.
+        """
+        return cls(
+            f"{name} already exists.",
+            hint="Re-run with --force to replace it, or choose another path with -o.",
+        )
+
+
+def reason_text(exc: BaseException) -> str:
+    """Render an exception as a one-line reason for an error headline.
+
+    Takes the first non-blank line of ``str(exc)`` and drops one trailing
+    period, so the caller can end its sentence with its own. Falls back to
+    the exception's class name when the message is empty or only a period,
+    so a headline never ends in a blank reason.
+
+    Args:
+        exc: The exception to describe.
+
+    Returns:
+        A non-empty, single-line reason without a trailing period.
+    """
+    for raw_line in str(exc).splitlines():
+        line = raw_line.strip().removesuffix(".").strip()
+        if line:
+            return line
+    return exc.__class__.__name__

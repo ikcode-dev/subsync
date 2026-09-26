@@ -24,7 +24,12 @@ from urllib.error import URLError
 
 import whisper
 
-from subsync.errors import ModelDownloadError, ModelMemoryError, TranscriptionError
+from subsync.errors import (
+    ModelDownloadError,
+    ModelMemoryError,
+    TranscriptionError,
+    reason_text,
+)
 from subsync.models import (
     TranscriptionConfig,
     TranscriptionResult,
@@ -202,26 +207,12 @@ def _is_download_error(exc: Exception) -> bool:
     return isinstance(exc, RuntimeError) and "checksum" in str(exc).lower()
 
 
-def _reason_text(exc: Exception) -> str:
-    """Render an exception as a single-line reason with no trailing period.
-
-    Takes the first non-blank line of ``str(exc)`` so a multi-line message
-    never spills the CLI's one-line error headline across lines, and
-    strips a trailing period so callers can append their own without
-    doubling it (Whisper's checksum-mismatch message already ends in one).
-
-    Args:
-        exc: The exception to render.
-
-    Returns:
-        A single-line reason string with no trailing period.
-    """
-    text = str(exc)
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped:
-            return stripped.rstrip(".")
-    return text.strip().rstrip(".")
+def _out_of_memory(model_name: str) -> ModelMemoryError:
+    """The F20 error for running out of memory with ``model_name``."""
+    return ModelMemoryError(
+        f"Ran out of memory with model '{model_name}'.",
+        hint="Try a smaller one: -m small",
+    )
 
 
 def _resolve_device(device: str) -> str:
@@ -318,18 +309,15 @@ def load_model(config: TranscriptionConfig) -> LoadedModel:
             engine = whisper.load_model(config.model_name, device=device)
         except Exception as exc:
             if _is_out_of_memory(exc):
-                raise ModelMemoryError(
-                    f"Ran out of memory with model '{config.model_name}'.",
-                    hint="Try a smaller one: -m small",
-                ) from exc
+                raise _out_of_memory(config.model_name) from exc
             if not cached or _is_download_error(exc):
                 raise ModelDownloadError(
                     f"Couldn't download model '{config.model_name}': "
-                    f"{_reason_text(exc)}.",
+                    f"{reason_text(exc)}.",
                     hint="An internet connection is needed once per model.",
                 ) from exc
             raise TranscriptionError(
-                f"Couldn't load model '{config.model_name}': {_reason_text(exc)}.",
+                f"Couldn't load model '{config.model_name}': {reason_text(exc)}.",
                 hint="Re-run with -v for details.",
             ) from exc
 
@@ -412,12 +400,9 @@ def transcribe_with_model(
             )
         except Exception as exc:
             if _is_out_of_memory(exc):
-                raise ModelMemoryError(
-                    f"Ran out of memory with model '{model.name}'.",
-                    hint="Try a smaller one: -m small",
-                ) from exc
+                raise _out_of_memory(model.name) from exc
             raise TranscriptionError(
-                f"Transcription failed: {_reason_text(exc)}.",
+                f"Transcription failed: {reason_text(exc)}.",
                 hint="Re-run with -v for details.",
             ) from exc
 

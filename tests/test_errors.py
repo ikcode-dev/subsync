@@ -18,6 +18,7 @@ from subsync.errors import (
     TranscriptionError,
     URLParseError,
     VideoUnavailableError,
+    reason_text,
 )
 
 # (class, direct parent, exit code)
@@ -104,3 +105,34 @@ class TestHint:
         assert str(err) == "not a YouTube URL"
         assert err.hint is None
         assert err.args == ("not a YouTube URL",)
+
+
+class TestReasonText:
+    """reason_text renders any exception as a one-line reason."""
+
+    @pytest.mark.parametrize(
+        ("exc", "expected"),
+        [
+            (ValueError("bad value"), "bad value"),
+            (ValueError("bad value."), "bad value"),
+            (ValueError("truncated..."), "truncated.."),
+            (ValueError("\n  first line.\nsecond"), "first line"),
+            (RuntimeError(""), "RuntimeError"),
+            (RuntimeError("   "), "RuntimeError"),
+            (ValueError("."), "ValueError"),
+            (ValueError(" . "), "ValueError"),
+        ],
+    )
+    def test_reason(self, exc: Exception, expected: str) -> None:
+        """First non-blank line, one period dropped, class name fallback."""
+        assert reason_text(exc) == expected
+
+
+def test_output_exists_for_file() -> None:
+    """The F11 error names the file and offers --force or -o."""
+    err = OutputExistsError.for_file("ep42.en.srt")
+    assert str(err) == "ep42.en.srt already exists."
+    assert (
+        err.hint == "Re-run with --force to replace it, or choose another path with -o."
+    )
+    assert err.exit_code == 5

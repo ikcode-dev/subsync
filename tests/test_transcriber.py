@@ -628,6 +628,23 @@ class TestErrorWording:
     """
 
     @patch("subsync.transcriber.whisper")
+    @patch("subsync.transcriber.is_model_cached", return_value=True)
+    @patch("subsync.transcriber._resolve_device", return_value="cpu")
+    def test_blank_load_failure_still_names_a_reason(
+        self,
+        mock_device: MagicMock,
+        mock_cached: MagicMock,
+        mock_whisper: MagicMock,
+    ) -> None:
+        """A message-less exception never leaves a blank reason."""
+        mock_whisper.load_model.side_effect = RuntimeError()
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            load_model(TranscriptionConfig(model_name="turbo"))
+
+        assert str(exc_info.value) == "Couldn't load model 'turbo': RuntimeError."
+
+    @patch("subsync.transcriber.whisper")
     @patch("subsync.transcriber.is_model_cached", return_value=False)
     @patch("subsync.transcriber._resolve_device", return_value="cpu")
     def test_f19_model_download_error_wording(
