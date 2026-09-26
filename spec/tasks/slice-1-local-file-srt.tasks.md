@@ -201,13 +201,13 @@ process_transcription(result: TranscriptionResult,
 
 ### Acceptance Criteria
 
-- [ ] Every test fixture's output passes `check_cues` from S1.1, and its `short_cues` match the report's `short` flags
-- [ ] The text-preservation property holds for every fixture
-- [ ] All times are whole milliseconds
-- [ ] A 49-character URL comes out unchanged and flagged with its timestamp
-- [ ] A 150-character sentence becomes 2 or more subtitles within 2 × 42, each starting at one of its word timestamps
-- [ ] A seeded randomized test (fixed seed, about 200 adversarial transcripts built with the stdlib `random`) passes the invariants and text preservation
-- [ ] `uv run pytest tests/test_processor.py` and `uv run ruff check .` pass
+- [x] Every test fixture's output passes `check_cues` from S1.1, and its `short_cues` match the report's `short` flags
+- [x] The text-preservation property holds for every fixture
+- [x] All times are whole milliseconds
+- [x] A 49-character URL comes out unchanged and flagged with its timestamp
+- [x] A 150-character sentence becomes 2 or more subtitles within 2 × 42, each starting at one of its word timestamps
+- [x] A seeded randomized test (fixed seed, about 200 adversarial transcripts built with the stdlib `random`) passes the invariants and text preservation
+- [x] `uv run pytest tests/test_processor.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -298,11 +298,11 @@ write_output(content: str, path: Path, force: bool) -> None           # F11 re-c
 
 ### Acceptance Criteria
 
-- [ ] Naming table, pre-check and F4/F12 cases pass (scenarios 1–12)
-- [ ] `render_srt` matches a golden string exactly and passes `assert_valid_srt`
-- [ ] A failure injected mid-write leaves neither a temp file nor a final file
-- [ ] An existing file is never replaced without `force`, at either check
-- [ ] `uv run pytest tests/test_output.py tests/test_writer.py` and `uv run ruff check .` pass
+- [x] Naming table, pre-check and F4/F12 cases pass (scenarios 1–12)
+- [x] `render_srt` matches a golden string exactly and passes `assert_valid_srt`
+- [x] A failure injected mid-write leaves neither a temp file nor a final file
+- [x] An existing file is never replaced without `force`, at either check
+- [x] `uv run pytest tests/test_output.py tests/test_writer.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -378,10 +378,10 @@ extract_audio(path: Path, output_dir: Path) -> Path     # 16 kHz mono PCM WAV; M
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–10 pass against real FFmpeg; scenario 11 passes without FFmpeg
-- [ ] `capfd` shows no FFmpeg output during any call
-- [ ] Also create `tests/media_fixtures.py`: helpers that generate test media with FFmpeg's built-in sources (tone with or without video, video-only, multi-track, garbage bytes). S1.7 reuses them
-- [ ] `uv run pytest tests/test_media.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–10 pass against real FFmpeg; scenario 11 passes without FFmpeg
+- [x] `capfd` shows no FFmpeg output during any call
+- [x] Also create `tests/media_fixtures.py`: helpers that generate test media with FFmpeg's built-in sources (tone with or without video, video-only, multi-track, garbage bytes). S1.7 reuses them
+- [x] `uv run pytest tests/test_media.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -456,9 +456,9 @@ transcribe_audio(...)   # unchanged signature and behavior, now composed of the 
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–9 pass with Whisper mocked at the module boundary, as in the existing tests
-- [ ] `import subsync.transcriber` still works. Import cost is acceptable here because the CLI imports this module lazily (S1.7)
-- [ ] `uv run pytest tests/test_transcriber.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–9 pass with Whisper mocked at the module boundary, as in the existing tests
+- [x] `import subsync.transcriber` still works. Import cost is acceptable here because the CLI imports this module lazily (S1.7)
+- [x] `uv run pytest tests/test_transcriber.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -533,8 +533,8 @@ The command then calls a single seam, run-generate(parsed options) → exit code
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–14 pass
-- [ ] `uv run pytest tests/test_cli.py tests/test_catalog.py tests/test_sources.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–14 pass
+- [x] `uv run pytest tests/test_cli.py tests/test_catalog.py tests/test_sources.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -630,10 +630,10 @@ ep42.mov · 14:52 · local file
 
 ### Acceptance Criteria
 
-- [ ] Integration scenarios I1–I18 pass in the default suite
-- [ ] E2E scenarios E1–E4 pass with `task test:e2e` on Igor's Mac
+- [x] Integration scenarios I1–I18 pass in the default suite
+- [x] E2E scenarios E1–E4 pass with `task test:e2e` on Igor's Mac
 - [ ] The slice-level acceptance criteria, except the manual ones in S1.8, are ticked
-- [ ] `uv run pytest`, `uv run pytest -m e2e` and `uv run ruff check .` pass
+- [x] `uv run pytest`, `uv run pytest -m e2e` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
