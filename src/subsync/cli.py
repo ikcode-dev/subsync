@@ -167,9 +167,9 @@ def _summarize(exc: BaseException) -> str:
     name when the message has no non-blank line at all.
     """
     for raw_line in str(exc).splitlines():
-        line = raw_line.strip()
+        line = raw_line.strip().removesuffix(".").strip()
         if line:
-            return line[:-1] if line.endswith(".") else line
+            return line
     return exc.__class__.__name__
 
 
