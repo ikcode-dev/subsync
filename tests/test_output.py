@@ -43,7 +43,8 @@ class TestCheckOutputArgs:
             check_output_args("final.vtt", "srt")
         err = exc_info.value
         assert str(err) == "Output name ends in .vtt but --format is srt."
-        assert err.hint
+        # -f vtt is rejected until S5, so the hint must not suggest it.
+        assert err.hint == "Use an output name ending in .srt."
 
 
 class TestPlanOutputNaming:

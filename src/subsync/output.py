@@ -43,12 +43,12 @@ def check_output_args(output_arg: str | None, fmt: str) -> None:
     suffix = Path(output_arg).suffix.lower()
     if suffix not in _FORMAT_EXTENSIONS:
         return
-    named_fmt = suffix[1:]
-    if named_fmt == fmt:
+    if suffix[1:] == fmt:
         return
+    # Only srt can be written until S5 adds VTT, so renaming is the one fix.
     raise InputError(
         f"Output name ends in {suffix} but --format is {fmt}.",
-        hint=f"Use --format {named_fmt}, or an output name ending in .{fmt}.",
+        hint=f"Use an output name ending in .{fmt}.",
     )
 
 
