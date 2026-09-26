@@ -1,5 +1,7 @@
 # YouTube Video Subtitle Generation Algorithm
 
+> **Background document (revised 2026-09-25 for SubSync v1).** v1 behavior is defined by the product/design documents in [`docs/product-design/subsync-v1/`](product-design/subsync-v1/index.md) and by the specs in [`spec/`](../spec/); where they differ, they win. In short: input is a **local media file or a YouTube URL**; the model is chosen with **`-m/--model`** (default `turbo`), not `-q/--quality`; there is **no `--children`** option; translation is the next increment after v1.
+
 This algorithm has been created using Claude Opus 4.5.
 
 ## Executive Summary
@@ -33,9 +35,9 @@ Transform YouTube video audio into professional-quality subtitles that:
 - Support future translation capabilities
 
 ### Input
-- YouTube video URL (public videos)
-- Target language code (language of the audio)
-- Optional: output path, quality settings
+- A local video or audio file (mp4, mov, mkv, webm, m4a, mp3, wav), or a YouTube video URL (public or unlisted)
+- Optional: spoken language code (auto-detected by default)
+- Optional: output path, format, Whisper model name (`-m`), vocabulary hint
 
 ### Output
 - SRT subtitle file (primary format - universal compatibility)
@@ -95,21 +97,28 @@ Transform YouTube video audio into professional-quality subtitles that:
 ### Step 1: Input Validation
 
 ```
-INPUT: youtube_url, language_code, [output_path], [quality]
+INPUT: input (file path or YouTube URL), [language_code], [output_path], [format], [model]
 
 PROCESS:
-  1. Parse URL to extract video ID
-     - Supported formats:
+  1. Resolve the input (v1)
+     - An existing file → local-file route (FFmpeg extracts the audio, offline)
+     - Otherwise a supported YouTube URL → URL route; supported formats:
        • https://www.youtube.com/watch?v=VIDEO_ID
        • https://youtu.be/VIDEO_ID
        • https://www.youtube.com/embed/VIDEO_ID
        • https://www.youtube.com/v/VIDEO_ID
+       • https://youtube.com/shorts/VIDEO_ID  (v1)
+       • https://m.youtube.com/watch?v=VIDEO_ID  (v1)
+     - Anything else → error with both accepted forms (exit 2)
 
   2. Validate language code against Whisper supported languages
      - List of 99+ supported languages
      - Auto-detection available if not specified
 
-  3. Validate output path (create if needed)
+  3. Validate the model name, the format and the output path
+     - The output folder must exist (it is never created)
+     - An existing output file is refused without --force, before any heavy work
+     - FFmpeg must be on PATH
 
 OUTPUT: Validated parameters object
 ```
@@ -178,8 +187,8 @@ CLEANUP: Register for deletion on completion/error
 INPUT: audio_file_path, language_code
 
 PROCESS (using OpenAI Whisper):
-  1. Select model based on quality setting:
-     - "turbo": Fast, good accuracy (recommended)
+  1. Use the model named with -m/--model (standard Whisper names; default "turbo"):
+     - "turbo": Fast, good accuracy (default)
      - "large-v3": Best accuracy, slower
      - "medium": Balanced
      - "small"/"base"/"tiny": Faster, less accurate
@@ -190,7 +199,7 @@ PROCESS (using OpenAI Whisper):
      - language: specified or auto-detect
      - task: "transcribe" (not translate)
      - word_timestamps: True (granular timing)
-     - verbose: False
+     - no console output from Whisper (SubSync shows its own progress)
 
   4. Extract segments with timing:
      - Each segment has start, end, text
@@ -736,25 +745,33 @@ Protocol: ITranslator
 ### CLI Command Structure
 
 ```
-Usage: subsync generate <youtube_url> [OPTIONS]
+Usage: subsync generate <INPUT> [OPTIONS]
 
 Arguments:
-  youtube_url          YouTube video URL (required)
+  INPUT                  Path to a video or audio file, or a YouTube video URL (required)
 
 Options:
-  -l, --language TEXT  Audio language code (default: auto-detect)
-  -o, --output PATH    Output file path (default: ./video_title.srt)
-  -f, --format TEXT    Output format: srt, vtt (default: srt)
-  -q, --quality TEXT   Model quality: fast, balanced, best (default: balanced)
-  --children           Apply stricter reading speed for children's content
-  -v, --verbose        Show detailed progress
-  --help               Show this help message
+  -l, --language CODE    Spoken language; skips detection (default: auto-detect)
+  -m, --model NAME       Whisper model (default: turbo)
+  -f, --format srt|vtt   Output format (default: srt, or inferred from -o)
+  -o, --output PATH      A folder for the default name, or an exact file path
+                         (default: <input folder>/<stem>.<lang>.srt for a file,
+                         ./<title>.<lang>.srt for a URL)
+  --force                Replace an existing output file
+  --prompt TEXT          Words to spell correctly, e.g. "uv, Claude Code, pytest"
+  --glossary FILE        Same, one term per line
+  -v, --verbose          Debug logs, and a traceback if an error occurs
+  --version              Show the version
+  -h, --help             Show this help message
 
 Examples:
-  subsync generate "https://youtube.com/watch?v=abc123" -l en
-  subsync generate "https://youtu.be/abc123" -o subtitles.srt
-  subsync generate "https://youtube.com/watch?v=abc123" -q best --verbose
+  subsync generate ~/Videos/ep42.mov
+  subsync generate ~/Videos/ep42.mov --glossary ~/yt/terms.txt -o out/
+  subsync generate "https://youtu.be/abc123def45" -l en
+  subsync generate "https://youtube.com/shorts/abc123def45" -m small
 ```
+
+The full command surface, messages and exit codes are in [ux-flows.md](product-design/subsync-v1/ux-flows.md).
 
 ---
 
@@ -797,6 +814,7 @@ Full list: https://github.com/openai/whisper/blob/main/whisper/tokenizer.py
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | **2025**-12-04 | Initial algorithm design |
+| 1.1 | 2026-09-25 | Marked as background for SubSync v1; local-file input, `-m/--model` instead of `-q/--quality`, no `--children`; CLI block aligned with the v1 UX flows |
 
 ---
 

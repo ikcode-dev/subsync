@@ -6,6 +6,8 @@ This document captures YouTube's subtitle upload requirements and format specifi
 
 **Source**: [YouTube Help - Add subtitles & captions](https://support.google.com/youtube/answer/2734796)
 
+**Revised 2026-09-25 for SubSync v1**: adds `/shorts/` and `m.youtube.com` URL patterns and the unsupported link kinds, fixes the encoding to UTF-8 without BOM with LF line endings, records the file naming for both input routes, and the private-video route (export the file, use local-file input). Sources: [product brief](../../docs/product-design/subsync-v1/product-brief.md) R2, R14, R17, R21 and the [phase 4 plan](../plan/phase-4-cli-output.md).
+
 ---
 
 ## Supported Upload Formats
@@ -64,8 +66,9 @@ something very important.
 1. Sequence numbers start at 1, increment by 1
 2. Blank line required between subtitle events
 3. Maximum 2 lines per subtitle
-4. UTF-8 encoding required
+4. UTF-8 encoding required; SubSync writes it **without a BOM** (A3: YouTube Studio accepts it)
 5. No styling tags in basic SRT (YouTube strips them)
+6. SubSync uses LF line endings and ends the file with a single newline (E9)
 
 ---
 
@@ -121,6 +124,8 @@ something very important.
 8. Review in editor
 9. Publish
 
+SubSync's summary ends with this path as a one-line hint (`YouTube Studio → Subtitles → your video → Add → Upload file → With timing`). The wording follows the current Studio UI and is checked at the first manual upload (A3, U7). Upload through the YouTube API is out of scope (D3).
+
 ---
 
 ## YouTube URL Patterns
@@ -135,6 +140,21 @@ SubSync must recognize these URL formats:
 | Legacy | `https://www.youtube.com/v/VIDEO_ID` |
 | With playlist | `https://www.youtube.com/watch?v=VIDEO_ID&list=...` |
 | With timestamp | `https://www.youtube.com/watch?v=VIDEO_ID&t=123` |
+| Shorts | `https://youtube.com/shorts/VIDEO_ID` |
+| Mobile | `https://m.youtube.com/watch?v=VIDEO_ID` |
+
+The Shorts and mobile patterns are new in v1 (R2) and are delivered in slice S4; until then only the first six are parsed.
+
+**Not supported** (stop with "This link isn't a single YouTube video", exit 2, F10):
+
+| Link kind | Example |
+|---|---|
+| Playlist only | `https://www.youtube.com/playlist?list=...` |
+| Channel | `https://www.youtube.com/@handle`, `/channel/...`, `/c/...` |
+| YouTube Music | `https://music.youtube.com/watch?v=...` |
+| Live URL | `https://www.youtube.com/live/...` (useful later for streams that have ended) |
+
+A URL input is only considered when the input is not an existing local file (R3).
 
 ### Video ID Format
 
@@ -148,8 +168,8 @@ SubSync must recognize these URL formats:
 
 ### Cannot Process
 
-- Private videos (unless authenticated)
-- Age-restricted content (requires cookies)
+- Private videos (unless authenticated). SubSync's route for a private draft is to export the rendered file and run it as local-file input; the private-video error says so (R21, F13)
+- Age-restricted content (requires cookies, which v1 does not support)
 - Live streams (real-time processing not supported)
 - Deleted/removed videos
 - Region-locked content (from blocked regions)
@@ -166,7 +186,10 @@ SubSync must recognize these URL formats:
 
 For SubSync:
 1. **Primary output**: SRT format for maximum compatibility
-2. **Optional output**: VTT as secondary format
-3. **Filename convention**: `{video_title}.{language}.srt`
-4. **Encoding**: Always UTF-8 with BOM consideration
+2. **Optional output**: VTT as secondary format (`-f vtt`, slice S5)
+3. **Filename convention** (R14):
+   - Local file input: `<input folder>/<stem>.<lang>.srt`
+   - YouTube URL input: `./<sanitized title>.<lang>.srt`
+   - `-o <folder>` puts the default name in that folder; `-o <file>` is used as the exact path
+4. **Encoding**: UTF-8 without BOM, LF line endings
 5. **URL parsing**: Extract video ID, ignore extra parameters

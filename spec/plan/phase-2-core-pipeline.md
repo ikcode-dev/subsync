@@ -7,6 +7,8 @@ This phase implements the core processing pipeline: extracting audio from YouTub
 **Estimated Effort**: 3-4 hours
 **Dependencies**: Phase 1 complete
 
+**Status**: merged (`main` @ `c659fdd`). **Revised 2026-09-25 for SubSync v1**: retry, model fallback, model cache and version pinning are settled by the agreed rules P4–P7 ([product brief](../../docs/product-design/subsync-v1/product-brief.md#rules-for-open-spec-questions)); see [Settled Policies](#settled-policies-v1). The Error Handling and Risks tables below were corrected to match.
+
 ---
 
 ## Goals
@@ -71,6 +73,21 @@ flowchart LR
 - Pro: Fast processing
 - Pro: Good accuracy for most content
 - Con: Requires GPU for reasonable speed
+
+**v1 note**: on Igor's Apple Silicon Mac openai-whisper runs on the CPU. Whether that meets the speed target (N1) is measured in the E1 spike after slice S1; a different engine may replace it behind `TranscriptionResult`, keeping the standard model names (P3).
+
+### Settled Policies (v1)
+
+| Topic | Rule | Consequence for this phase's components |
+|---|---|---|
+| Retries (P4) | Rely on yt-dlp's built-in retries and timeouts. A network failure exits 3 with "check your connection and re-run" | No retry loop in SubSync; options chosen in S4 (E6) |
+| Model fallback (P5) | None. On a memory or load failure, exit 4 and suggest `-m small` | The transcriber raises a clear error instead of retrying with a smaller model or another device |
+| Model cache (P6) | Whisper's own download cache (`~/.cache/whisper`) | Nothing to build; SubSync only detects whether a model is cached to show the one-time download notice (R7) |
+| Version pinning (P7) | No exact yt-dlp pin: a minimum version plus `uv.lock`; show the upgrade command when yt-dlp is out of date | Error classification for "outdated yt-dlp" is added in S4 (E11) |
+
+### Orchestrator Evolution (E4)
+
+`process_video()` (URL → metadata → download → transcription) is not called by the CLI. SubSync v1 adds one source-agnostic orchestrator, `generate`, and a `MediaSource` model for both local files and YouTube URLs ([phase 4 plan](./phase-4-cli-output.md#one-orchestrator-for-files-and-urls-e4)). Slice S1 builds the local-file branch; slice S4 folds the URL steps of `process_video()` into `generate` and retires `process_video()`. `pipeline_temp_dir()`, `get_video_metadata()`, `download_audio()`, `transcribe_audio()` and `ProgressMapper` are reused.
 
 ### Audio Format
 
@@ -193,8 +210,8 @@ THEN fall back to CPU automatically
 | Private video | VideoUnavailableError | User message about privacy |
 | Age-restricted | AgeRestrictedError | User message (no workaround without cookies) |
 | Live stream | LiveStreamError | User message to wait for completion |
-| Model load failure | TranscriptionError | Fallback to smaller model or CPU |
-| Network timeout | Retry with backoff, then fail |
+| Model load failure | TranscriptionError | No fallback (P5): exit 4 with a `-m small` hint |
+| Network timeout | Source-unavailable category (classified in S4) | yt-dlp's built-in retries only (P4), then exit 3: check connection and re-run |
 
 ---
 
@@ -202,9 +219,9 @@ THEN fall back to CPU automatically
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| yt-dlp API changes | Breaks extraction | Pin version, monitor updates |
+| yt-dlp API changes | Breaks extraction | Minimum version + `uv.lock`, no exact pin; upgrade hint when yt-dlp is out of date (P7) |
 | Large videos timeout | User frustration | Add timeout config, show progress |
-| Whisper OOM on GPU | Crash | Catch exception, retry on CPU |
+| Whisper OOM | Crash | Catch the error and exit 4 with a `-m small` hint; no automatic retry (P5) |
 | No word timestamps | Less precise subtitles | Fall back to segment timing |
 
 ---
