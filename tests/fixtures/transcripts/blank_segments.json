@@ -1,0 +1,31 @@
+{
+  "description": "Only empty or whitespace-only segments (music, silence).",
+  "language": "en",
+  "duration": 20.0,
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 4.0,
+      "text": "",
+      "words": []
+    },
+    {
+      "id": 1,
+      "start": 4.0,
+      "end": 8.0,
+      "text": "   ",
+      "words": []
+    },
+    {
+      "id": 2,
+      "start": 8.0,
+      "end": 12.0,
+      "text": " \n\t ",
+      "words": [
+        {"word": " ", "start": 8.0, "end": 9.0},
+        {"word": "", "start": 9.0, "end": 9.5}
+      ]
+    }
+  ]
+}

@@ -30,3 +30,12 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.6",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Test helpers (srt_invariants, media_fixtures) import by module name from any test folder
+pythonpath = ["tests"]
+markers = [
+    "e2e: opt-in end-to-end tests with real Whisper and FFmpeg (run with: task test:e2e)",
+]
+addopts = "-m 'not e2e'"

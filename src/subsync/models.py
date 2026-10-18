@@ -7,11 +7,37 @@ ensuring consistent data flow between modules.
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from typing import Literal
 
 
 # =============================================================================
 # Core Models
 # =============================================================================
+
+
+@dataclass
+class MediaSource:
+    """What is being processed, for either input route.
+
+    Attributes:
+        kind: ``"file"`` for a local media file, ``"youtube"`` for a URL.
+        display_name: File name, or video title.
+        output_stem: File stem, or sanitized title; the output name starts with it.
+        output_dir: Default output folder (the input's folder, or the current one).
+        path: Local file path (file only).
+        duration: Duration in seconds, once probed or fetched.
+        video_id: YouTube video ID (YouTube only).
+        channel: YouTube channel name (YouTube only).
+    """
+
+    kind: Literal["file", "youtube"]
+    display_name: str
+    output_stem: str
+    output_dir: Path
+    path: Path | None = None
+    duration: float | None = None
+    video_id: str | None = None
+    channel: str | None = None
 
 
 @dataclass
@@ -107,8 +133,8 @@ class Subtitle:
 
     @property
     def duration_ms(self) -> int:
-        """Duration in milliseconds."""
-        return int((self.end_time - self.start_time).total_seconds() * 1000)
+        """Duration in whole milliseconds, rounded down (exact integer arithmetic)."""
+        return (self.end_time - self.start_time) // timedelta(milliseconds=1)
 
     @property
     def cps(self) -> float:
@@ -128,13 +154,11 @@ class SubtitleFile:
     Attributes:
         format: Output format ("srt" or "vtt").
         language: Language code.
-        video_id: Source video ID.
         subtitles: Ordered subtitle events.
     """
 
     format: str
     language: str
-    video_id: str
     subtitles: list[Subtitle]
 
 
@@ -161,6 +185,25 @@ class TimingValidation:
 
 
 @dataclass
+class ComplianceFlag:
+    """A subtitle the summary lists for review.
+
+    Attributes:
+        kind: ``"short"`` (under the minimum duration and could not be fixed),
+            ``"long_word"`` (a word longer than a line, kept whole) or
+            ``"cps"`` (reading speed still too fast).
+        subtitle_index: The flagged subtitle's number (1-based).
+        start_time: The flagged subtitle's start, for the summary's jump list.
+        detail: Optional extra information, such as the CPS value.
+    """
+
+    kind: Literal["short", "long_word", "cps"]
+    subtitle_index: int
+    start_time: timedelta
+    detail: str = ""
+
+
+@dataclass
 class ComplianceReport:
     """Aggregate compliance status for a subtitle file.
 
@@ -172,6 +215,7 @@ class ComplianceReport:
         is_compliant: True if no blocking issues.
         warnings: Non-blocking issues.
         errors: Blocking issues.
+        flags: Subtitles to review, sorted by start time.
     """
 
     total_subtitles: int
@@ -181,6 +225,7 @@ class ComplianceReport:
     is_compliant: bool
     warnings: list[str] = field(default_factory=lambda: [])
     errors: list[str] = field(default_factory=lambda: [])
+    flags: list[ComplianceFlag] = field(default_factory=lambda: [])
 
 
 # =============================================================================
