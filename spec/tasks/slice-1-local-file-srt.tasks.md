@@ -40,7 +40,7 @@ Settled during planning on 2026-09-25. Details and rationale are in the phase-4 
 - [x] Exit codes 0, 1, 2, 4, 5 and 130 are each covered by a CLI test (R22)
 - [x] Ctrl+C exits 130 within 2 s, writes nothing and leaves no temp files (R23)
 - [x] The opt-in e2e suite passes on Igor's Mac (`task test:e2e`)
-- [ ] One real episode is uploaded to YouTube Studio "With timing" and accepted (A3); total time recorded for N1
+- [x] One real episode is uploaded to YouTube Studio "With timing" and accepted (A3); total time recorded for N1
 - [x] `task test` and `task lint` pass
 
 ### Requirement Coverage
