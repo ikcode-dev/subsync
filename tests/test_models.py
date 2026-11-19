@@ -4,7 +4,9 @@ from datetime import timedelta
 from pathlib import Path
 
 from subsync.models import (
+    ComplianceFlag,
     ComplianceReport,
+    MediaSource,
     OutputConfig,
     ProcessingConfig,
     Subtitle,
@@ -137,6 +139,23 @@ class TestSubtitle:
         )
         assert subtitle.duration_ms == 2500
 
+    def test_duration_ms_is_exact_for_whole_milliseconds(self) -> None:
+        """Whole-millisecond durations are never off by one (float truncation)."""
+        start = timedelta(seconds=3)
+        wrong = [
+            ms
+            for ms in range(0, 20_001)
+            if Subtitle(
+                index=1,
+                start_time=start,
+                end_time=start + timedelta(milliseconds=ms),
+                text="x",
+                lines=["x"],
+            ).duration_ms
+            != ms
+        ]
+        assert wrong == []
+
     def test_cps_calculation(self) -> None:
         """Test characters per second calculation."""
         subtitle = Subtitle(
@@ -176,13 +195,78 @@ class TestSubtitleFile:
         file = SubtitleFile(
             format="srt",
             language="en",
-            video_id="dQw4w9WgXcQ",
             subtitles=[subtitle],
         )
         assert file.format == "srt"
         assert file.language == "en"
-        assert file.video_id == "dQw4w9WgXcQ"
         assert len(file.subtitles) == 1
+
+    def test_has_no_video_id(self) -> None:
+        """SubtitleFile is source-agnostic and drops the YouTube video ID."""
+        file = SubtitleFile(format="srt", language="en", subtitles=[])
+        assert not hasattr(file, "video_id")
+
+
+class TestMediaSource:
+    """Tests for MediaSource model."""
+
+    def test_local_file_source(self) -> None:
+        """A local file source holds its fields; YouTube fields default to None."""
+        path = Path("~/Videos/ep42.mov").expanduser()
+        source = MediaSource(
+            kind="file",
+            display_name="ep42.mov",
+            output_stem="ep42",
+            output_dir=path.parent,
+            path=path,
+        )
+        assert source.kind == "file"
+        assert source.display_name == "ep42.mov"
+        assert source.output_stem == "ep42"
+        assert source.output_dir == path.parent
+        assert source.path == path
+        assert source.duration is None
+        assert source.video_id is None
+        assert source.channel is None
+
+    def test_youtube_source(self) -> None:
+        """A YouTube source carries its video ID and channel and no path."""
+        source = MediaSource(
+            kind="youtube",
+            display_name="Episode 42",
+            output_stem="Episode 42",
+            output_dir=Path.cwd(),
+            duration=892.0,
+            video_id="dQw4w9WgXcQ",
+            channel="ikcode",
+        )
+        assert source.path is None
+        assert source.duration == 892.0
+        assert source.video_id == "dQw4w9WgXcQ"
+        assert source.channel == "ikcode"
+
+
+class TestComplianceFlag:
+    """Tests for ComplianceFlag model."""
+
+    def test_create_flag(self) -> None:
+        """A flag names its kind, subtitle, start time and optional detail."""
+        flag = ComplianceFlag(
+            kind="long_word",
+            subtitle_index=3,
+            start_time=timedelta(seconds=74.5),
+        )
+        assert flag.kind == "long_word"
+        assert flag.subtitle_index == 3
+        assert flag.start_time == timedelta(seconds=74.5)
+        assert flag.detail == ""
+
+    def test_flag_with_detail(self) -> None:
+        """The detail carries extra information such as a CPS value."""
+        flag = ComplianceFlag(
+            kind="cps", subtitle_index=1, start_time=timedelta(0), detail="23.4 CPS"
+        )
+        assert flag.detail == "23.4 CPS"
 
 
 class TestTimingValidation:
@@ -225,6 +309,7 @@ class TestComplianceReport:
         assert report.is_compliant is True
         assert report.warnings == []
         assert report.errors == []
+        assert report.flags == []
 
     def test_non_compliant_report(self) -> None:
         """Test non-compliant report with issues."""
@@ -240,6 +325,28 @@ class TestComplianceReport:
         assert report.is_compliant is False
         assert len(report.warnings) == 1
         assert len(report.errors) == 2
+
+    def test_flags_are_not_shared_between_reports(self) -> None:
+        """Each report gets its own flags list."""
+        first = ComplianceReport(
+            total_subtitles=1,
+            timing_issues=0,
+            cps_warnings=0,
+            line_length_issues=0,
+            is_compliant=True,
+        )
+        second = ComplianceReport(
+            total_subtitles=1,
+            timing_issues=0,
+            cps_warnings=0,
+            line_length_issues=0,
+            is_compliant=True,
+        )
+        first.flags.append(
+            ComplianceFlag(kind="short", subtitle_index=1, start_time=timedelta(0))
+        )
+        assert len(first.flags) == 1
+        assert second.flags == []
 
 
 class TestConfigDefaults:

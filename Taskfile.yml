@@ -16,9 +16,14 @@ tasks:
       - uv run subsync
 
   test:
-    desc: Run tests
+    desc: Run tests (end-to-end tests excluded)
     cmds:
       - uv run pytest
+
+  test:e2e:
+    desc: Run the opt-in end-to-end tests (real Whisper tiny, FFmpeg and macOS say)
+    cmds:
+      - uv run pytest -m e2e
 
   lint:
     desc: Lint the code

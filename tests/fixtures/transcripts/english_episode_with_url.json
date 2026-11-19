@@ -1,0 +1,159 @@
+{
+  "description": "Realistic English screencast episode: 8 Whisper-style segments with leading-space words and attached punctuation, two segments longer than 2 x 42 characters, and the 49-character URL github.com/ikcode-dev/subsync/blob/main/README.md as a single word (exactly one long_word flag, no short flags).",
+  "language": "en",
+  "duration": 41.0,
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 2.6,
+      "text": " Hi, and welcome back to the channel.",
+      "words": [
+        {"word": " Hi,", "start": 0.0, "end": 0.3},
+        {"word": " and", "start": 0.3, "end": 0.59},
+        {"word": " welcome", "start": 0.59, "end": 1.12},
+        {"word": " back", "start": 1.12, "end": 1.48},
+        {"word": " to", "start": 1.48, "end": 1.71},
+        {"word": " the", "start": 1.71, "end": 2.01},
+        {"word": " channel.", "start": 2.01, "end": 2.6}
+      ]
+    },
+    {
+      "id": 1,
+      "start": 3.3,
+      "end": 9.4,
+      "text": " Today we are going to turn a local video file into subtitles you can upload straight to YouTube Studio.",
+      "words": [
+        {"word": " Today", "start": 3.3, "end": 3.65},
+        {"word": " we", "start": 3.65, "end": 3.85},
+        {"word": " are", "start": 3.85, "end": 4.09},
+        {"word": " going", "start": 4.09, "end": 4.44},
+        {"word": " to", "start": 4.44, "end": 4.64},
+        {"word": " turn", "start": 4.64, "end": 4.94},
+        {"word": " a", "start": 4.94, "end": 5.09},
+        {"word": " local", "start": 5.09, "end": 5.43},
+        {"word": " video", "start": 5.43, "end": 5.78},
+        {"word": " file", "start": 5.78, "end": 6.08},
+        {"word": " into", "start": 6.08, "end": 6.37},
+        {"word": " subtitles", "start": 6.37, "end": 6.92},
+        {"word": " you", "start": 6.92, "end": 7.17},
+        {"word": " can", "start": 7.17, "end": 7.42},
+        {"word": " upload", "start": 7.42, "end": 7.81},
+        {"word": " straight", "start": 7.81, "end": 8.31},
+        {"word": " to", "start": 8.31, "end": 8.51},
+        {"word": " YouTube", "start": 8.51, "end": 8.95},
+        {"word": " Studio.", "start": 8.95, "end": 9.4}
+      ]
+    },
+    {
+      "id": 2,
+      "start": 10.1,
+      "end": 12.4,
+      "text": " Everything runs on your own machine.",
+      "words": [
+        {"word": " Everything", "start": 10.1, "end": 10.74},
+        {"word": " runs", "start": 10.74, "end": 11.06},
+        {"word": " on", "start": 11.06, "end": 11.28},
+        {"word": " your", "start": 11.28, "end": 11.6},
+        {"word": " own", "start": 11.6, "end": 11.87},
+        {"word": " machine.", "start": 11.87, "end": 12.4}
+      ]
+    },
+    {
+      "id": 3,
+      "start": 13.2,
+      "end": 20.3,
+      "text": " First, we install the package with uv sync, and then we run the tests to make sure nothing is broken.",
+      "words": [
+        {"word": " First,", "start": 13.2, "end": 13.67},
+        {"word": " we", "start": 13.67, "end": 13.9},
+        {"word": " install", "start": 13.9, "end": 14.42},
+        {"word": " the", "start": 14.42, "end": 14.71},
+        {"word": " package", "start": 14.71, "end": 15.24},
+        {"word": " with", "start": 15.24, "end": 15.59},
+        {"word": " uv", "start": 15.59, "end": 15.82},
+        {"word": " sync,", "start": 15.82, "end": 16.23},
+        {"word": " and", "start": 16.23, "end": 16.52},
+        {"word": " then", "start": 16.52, "end": 16.87},
+        {"word": " we", "start": 16.87, "end": 17.1},
+        {"word": " run", "start": 17.1, "end": 17.39},
+        {"word": " the", "start": 17.39, "end": 17.68},
+        {"word": " tests", "start": 17.68, "end": 18.09},
+        {"word": " to", "start": 18.09, "end": 18.32},
+        {"word": " make", "start": 18.32, "end": 18.67},
+        {"word": " sure", "start": 18.67, "end": 19.02},
+        {"word": " nothing", "start": 19.02, "end": 19.54},
+        {"word": " is", "start": 19.54, "end": 19.78},
+        {"word": " broken.", "start": 19.78, "end": 20.3}
+      ]
+    },
+    {
+      "id": 4,
+      "start": 21.1,
+      "end": 27.0,
+      "text": " The full instructions are at github.com/ikcode-dev/subsync/blob/main/README.md if you want to follow along.",
+      "words": [
+        {"word": " The", "start": 21.1, "end": 21.35},
+        {"word": " full", "start": 21.35, "end": 21.64},
+        {"word": " instructions", "start": 21.64, "end": 22.33},
+        {"word": " are", "start": 22.33, "end": 22.57},
+        {"word": " at", "start": 22.57, "end": 22.77},
+        {"word": " github.com/ikcode-dev/subsync/blob/main/README.md", "start": 22.77, "end": 25.28},
+        {"word": " if", "start": 25.28, "end": 25.48},
+        {"word": " you", "start": 25.48, "end": 25.72},
+        {"word": " want", "start": 25.72, "end": 26.02},
+        {"word": " to", "start": 26.02, "end": 26.21},
+        {"word": " follow", "start": 26.21, "end": 26.61},
+        {"word": " along.", "start": 26.61, "end": 27.0}
+      ]
+    },
+    {
+      "id": 5,
+      "start": 28.4,
+      "end": 30.2,
+      "text": " Okay, let's run it.",
+      "words": [
+        {"word": " Okay,", "start": 28.4, "end": 28.92},
+        {"word": " let's", "start": 28.92, "end": 29.45},
+        {"word": " run", "start": 29.45, "end": 29.82},
+        {"word": " it.", "start": 29.82, "end": 30.2}
+      ]
+    },
+    {
+      "id": 6,
+      "start": 31.6,
+      "end": 35.0,
+      "text": " As you can see, the file is written right next to the video.",
+      "words": [
+        {"word": " As", "start": 31.6, "end": 31.78},
+        {"word": " you", "start": 31.78, "end": 32.01},
+        {"word": " can", "start": 32.01, "end": 32.24},
+        {"word": " see,", "start": 32.24, "end": 32.52},
+        {"word": " the", "start": 32.52, "end": 32.75},
+        {"word": " file", "start": 32.75, "end": 33.02},
+        {"word": " is", "start": 33.02, "end": 33.21},
+        {"word": " written", "start": 33.21, "end": 33.62},
+        {"word": " right", "start": 33.62, "end": 33.94},
+        {"word": " next", "start": 33.94, "end": 34.22},
+        {"word": " to", "start": 34.22, "end": 34.4},
+        {"word": " the", "start": 34.4, "end": 34.63},
+        {"word": " video.", "start": 34.63, "end": 35.0}
+      ]
+    },
+    {
+      "id": 7,
+      "start": 36.0,
+      "end": 38.6,
+      "text": " That's it for today. Thanks for watching!",
+      "words": [
+        {"word": " That's", "start": 36.0, "end": 36.42},
+        {"word": " it", "start": 36.42, "end": 36.64},
+        {"word": " for", "start": 36.64, "end": 36.9},
+        {"word": " today.", "start": 36.9, "end": 37.33},
+        {"word": " Thanks", "start": 37.33, "end": 37.75},
+        {"word": " for", "start": 37.75, "end": 38.02},
+        {"word": " watching!", "start": 38.02, "end": 38.6}
+      ]
+    }
+  ]
+}

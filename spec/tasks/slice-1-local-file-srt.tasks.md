@@ -30,18 +30,18 @@ Settled during planning on 2026-09-25. Details and rationale are in the phase-4 
 
 ## Slice-Level Acceptance Criteria
 
-- [ ] `subsync generate <file>` writes `<input folder>/<stem>.<lang>.srt` and exits 0 (R1, R14)
-- [ ] The written SRT passes the invariant checker: 0 overlaps, 0 gaps under 83 ms, no subtitle over 7 s, ≤ 2 lines, ≤ 42 chars except single long words (R8, R9, R12)
-- [ ] Long words are unchanged and listed with their timestamp in the summary (R12)
-- [ ] A second run exits 5 in about 1 s, before any extraction or model load (R15, U1)
-- [ ] Missing FFmpeg fails in under 1 s with the install hint (R24)
-- [ ] The file route makes no network calls once the model is cached (R4)
-- [ ] Every S1 failure row (F1–F4, F6–F9, F11, F12, F19–F25) shows its message and next step; no traceback unless `-v` (R20, R21)
-- [ ] Exit codes 0, 1, 2, 4, 5 and 130 are each covered by a CLI test (R22)
-- [ ] Ctrl+C exits 130 within 2 s, writes nothing and leaves no temp files (R23)
-- [ ] The opt-in e2e suite passes on Igor's Mac (`task test:e2e`)
-- [ ] One real episode is uploaded to YouTube Studio "With timing" and accepted (A3); total time recorded for N1
-- [ ] `task test` and `task lint` pass
+- [x] `subsync generate <file>` writes `<input folder>/<stem>.<lang>.srt` and exits 0 (R1, R14)
+- [x] The written SRT passes the invariant checker: 0 overlaps, 0 gaps under 83 ms, no subtitle over 7 s, ≤ 2 lines, ≤ 42 chars except single long words (R8, R9, R12)
+- [x] Long words are unchanged and listed with their timestamp in the summary (R12)
+- [x] A second run exits 5 in about 1 s, before any extraction or model load (R15, U1)
+- [x] Missing FFmpeg fails in under 1 s with the install hint (R24)
+- [x] The file route makes no network calls once the model is cached (R4)
+- [x] Every S1 failure row (F1–F4, F6–F9, F11, F12, F19–F25) shows its message and next step; no traceback unless `-v` (R20, R21)
+- [x] Exit codes 0, 1, 2, 4, 5 and 130 are each covered by a CLI test (R22)
+- [x] Ctrl+C exits 130 within 2 s, writes nothing and leaves no temp files (R23)
+- [x] The opt-in e2e suite passes on Igor's Mac (`task test:e2e`)
+- [x] One real episode is uploaded to YouTube Studio "With timing" and accepted (A3); total time recorded for N1
+- [x] `task test` and `task lint` pass
 
 ### Requirement Coverage
 
@@ -130,12 +130,12 @@ Existing call sites that pass only a message must keep working unchanged.
 
 ### Acceptance Criteria
 
-- [ ] `isinstance` relationships in the table hold; `except SubSyncError` still catches every SubSync error
-- [ ] `SubSyncError("x").hint is None`; `SubSyncError("x", hint="y").hint == "y"`; `str()` is the message
-- [ ] New models exist with the fields above; two `ComplianceReport` instances do not share a `flags` list
-- [ ] `SubtitleFile` has no `video_id`; `tests/test_models.py` updated
-- [ ] The invariant checker catches each violation class listed in the test scenarios
-- [ ] `uv run pytest` runs the existing 87 tests plus the new ones and skips `e2e`; `uv run ruff check .` passes
+- [x] `isinstance` relationships in the table hold; `except SubSyncError` still catches every SubSync error
+- [x] `SubSyncError("x").hint is None`; `SubSyncError("x", hint="y").hint == "y"`; `str()` is the message
+- [x] New models exist with the fields above; two `ComplianceReport` instances do not share a `flags` list
+- [x] `SubtitleFile` has no `video_id`; `tests/test_models.py` updated
+- [x] The invariant checker catches each violation class listed in the test scenarios
+- [x] `uv run pytest` runs the existing 87 tests plus the new ones and skips `e2e`; `uv run ruff check .` passes
 
 ### Test Scenarios
 
@@ -201,13 +201,13 @@ process_transcription(result: TranscriptionResult,
 
 ### Acceptance Criteria
 
-- [ ] Every test fixture's output passes `check_cues` from S1.1, and its `short_cues` match the report's `short` flags
-- [ ] The text-preservation property holds for every fixture
-- [ ] All times are whole milliseconds
-- [ ] A 49-character URL comes out unchanged and flagged with its timestamp
-- [ ] A 150-character sentence becomes 2 or more subtitles within 2 × 42, each starting at one of its word timestamps
-- [ ] A seeded randomized test (fixed seed, about 200 adversarial transcripts built with the stdlib `random`) passes the invariants and text preservation
-- [ ] `uv run pytest tests/test_processor.py` and `uv run ruff check .` pass
+- [x] Every test fixture's output passes `check_cues` from S1.1, and its `short_cues` match the report's `short` flags
+- [x] The text-preservation property holds for every fixture
+- [x] All times are whole milliseconds
+- [x] A 49-character URL comes out unchanged and flagged with its timestamp
+- [x] A 150-character sentence becomes 2 or more subtitles within 2 × 42, each starting at one of its word timestamps
+- [x] A seeded randomized test (fixed seed, about 200 adversarial transcripts built with the stdlib `random`) passes the invariants and text preservation
+- [x] `uv run pytest tests/test_processor.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -298,11 +298,11 @@ write_output(content: str, path: Path, force: bool) -> None           # F11 re-c
 
 ### Acceptance Criteria
 
-- [ ] Naming table, pre-check and F4/F12 cases pass (scenarios 1–12)
-- [ ] `render_srt` matches a golden string exactly and passes `assert_valid_srt`
-- [ ] A failure injected mid-write leaves neither a temp file nor a final file
-- [ ] An existing file is never replaced without `force`, at either check
-- [ ] `uv run pytest tests/test_output.py tests/test_writer.py` and `uv run ruff check .` pass
+- [x] Naming table, pre-check and F4/F12 cases pass (scenarios 1–12)
+- [x] `render_srt` matches a golden string exactly and passes `assert_valid_srt`
+- [x] A failure injected mid-write leaves neither a temp file nor a final file
+- [x] An existing file is never replaced without `force`, at either check
+- [x] `uv run pytest tests/test_output.py tests/test_writer.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -378,10 +378,10 @@ extract_audio(path: Path, output_dir: Path) -> Path     # 16 kHz mono PCM WAV; M
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–10 pass against real FFmpeg; scenario 11 passes without FFmpeg
-- [ ] `capfd` shows no FFmpeg output during any call
-- [ ] Also create `tests/media_fixtures.py`: helpers that generate test media with FFmpeg's built-in sources (tone with or without video, video-only, multi-track, garbage bytes). S1.7 reuses them
-- [ ] `uv run pytest tests/test_media.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–10 pass against real FFmpeg; scenario 11 passes without FFmpeg
+- [x] `capfd` shows no FFmpeg output during any call
+- [x] Also create `tests/media_fixtures.py`: helpers that generate test media with FFmpeg's built-in sources (tone with or without video, video-only, multi-track, garbage bytes). S1.7 reuses them
+- [x] `uv run pytest tests/test_media.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -456,9 +456,9 @@ transcribe_audio(...)   # unchanged signature and behavior, now composed of the 
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–9 pass with Whisper mocked at the module boundary, as in the existing tests
-- [ ] `import subsync.transcriber` still works. Import cost is acceptable here because the CLI imports this module lazily (S1.7)
-- [ ] `uv run pytest tests/test_transcriber.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–9 pass with Whisper mocked at the module boundary, as in the existing tests
+- [x] `import subsync.transcriber` still works. Import cost is acceptable here because the CLI imports this module lazily (S1.7)
+- [x] `uv run pytest tests/test_transcriber.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -533,8 +533,8 @@ The command then calls a single seam, run-generate(parsed options) → exit code
 
 ### Acceptance Criteria
 
-- [ ] Scenarios 1–14 pass
-- [ ] `uv run pytest tests/test_cli.py tests/test_catalog.py tests/test_sources.py` and `uv run ruff check .` pass
+- [x] Scenarios 1–14 pass
+- [x] `uv run pytest tests/test_cli.py tests/test_catalog.py tests/test_sources.py` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
@@ -630,10 +630,10 @@ ep42.mov · 14:52 · local file
 
 ### Acceptance Criteria
 
-- [ ] Integration scenarios I1–I18 pass in the default suite
-- [ ] E2E scenarios E1–E4 pass with `task test:e2e` on Igor's Mac
-- [ ] The slice-level acceptance criteria, except the manual ones in S1.8, are ticked
-- [ ] `uv run pytest`, `uv run pytest -m e2e` and `uv run ruff check .` pass
+- [x] Integration scenarios I1–I18 pass in the default suite
+- [x] E2E scenarios E1–E4 pass with `task test:e2e` on Igor's Mac
+- [x] The slice-level acceptance criteria, except the manual ones in S1.8, are ticked
+- [x] `uv run pytest`, `uv run pytest -m e2e` and `uv run ruff check .` pass
 
 ### Test Scenarios
 
